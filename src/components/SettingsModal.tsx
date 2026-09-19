@@ -15,6 +15,7 @@ import { type SoftPointCap } from '../utils/softCap';
 import { type GameClockTime } from '../utils/gameClock';
 import { SoftCapInput } from './SoftCapInput';
 import { GameClockInput } from './GameClockInput';
+import { capitalizeNameInput } from '../utils/capitalizeName';
 
 /** Compact ratio like "4:2" (open : women-matching). */
 function formatRatio(men: number, women: number): string {
@@ -303,7 +304,10 @@ export function SettingsModal({
                     style={styles.input}
                     type="text"
                     value={localTeam1Name}
-                    onChange={(e) => setLocalTeam1Name(e.target.value)}
+                    autoCapitalize="words"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onChange={(e) => setLocalTeam1Name(capitalizeNameInput(e.target.value))}
                     placeholder="Your team"
                   />
                 </div>
@@ -313,7 +317,10 @@ export function SettingsModal({
                     style={styles.input}
                     type="text"
                     value={localTeam2Name}
-                    onChange={(e) => setLocalTeam2Name(e.target.value)}
+                    autoCapitalize="words"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onChange={(e) => setLocalTeam2Name(capitalizeNameInput(e.target.value))}
                     placeholder="Opponent"
                   />
                 </div>

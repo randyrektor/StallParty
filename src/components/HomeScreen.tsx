@@ -8,6 +8,7 @@ import {
   saveRecentTeams,
 } from '../utils/recentTeams';
 import { deleteRosterForTeam } from '../utils/rosterStorage';
+import { capitalizeNameInput } from '../utils/capitalizeName';
 
 interface HomeScreenProps {
   onStart: (teamName: string) => void;
@@ -30,7 +31,7 @@ export function HomeScreen({ onStart, onResume, resumeLabel, onForgetTeam }: Hom
       return;
     }
 
-    const trimmedName = teamName.trim();
+    const trimmedName = capitalizeNameInput(teamName.trim());
     const updatedTeams = rememberRecentTeam(savedTeams, trimmedName);
     saveRecentTeams(updatedTeams);
     setSavedTeams(updatedTeams);
@@ -68,7 +69,10 @@ export function HomeScreen({ onStart, onResume, resumeLabel, onForgetTeam }: Hom
             <input
               type="text"
               value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
+              autoCapitalize="words"
+              autoCorrect="off"
+              spellCheck={false}
+              onChange={(e) => setTeamName(capitalizeNameInput(e.target.value))}
               onKeyPress={handleKeyPress}
               placeholder="Enter your team name"
               style={styles.input}

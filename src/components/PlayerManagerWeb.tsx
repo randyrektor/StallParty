@@ -12,6 +12,7 @@ import {
   getGenderPattern,
 } from '../utils/rotationHelpers';
 import { parseRosterText, rosterToCsv, type ParsedRosterRow } from '../utils/rosterImport';
+import { capitalizeNameInput } from '../utils/capitalizeName';
 import { type SoftPointCap } from '../utils/softCap';
 import { type GameClockTime } from '../utils/gameClock';
 import { SoftCapInput } from './SoftCapInput';
@@ -343,7 +344,10 @@ function AddGhostRow({
           ref={inputRef}
           className="player-seat-add-name"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          autoCapitalize="words"
+          autoCorrect="off"
+          spellCheck={false}
+          onChange={(e) => onChange(capitalizeNameInput(e.target.value))}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -739,7 +743,7 @@ export function PlayerManagerWeb({
   }
 
   function handleAddPlayer(gender: 'O' | 'W') {
-    const name = (gender === 'O' ? openDraft : womenDraft).trim();
+    const name = capitalizeNameInput((gender === 'O' ? openDraft : womenDraft).trim());
     if (!name) return;
     const jersey = parseJersey(gender === 'O' ? openJersey : womenJersey);
     const position = gender === 'O' ? openPosition : womenPosition;
