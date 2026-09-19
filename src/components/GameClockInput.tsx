@@ -17,13 +17,15 @@ export function GameClockInput({
   ariaLabel: string;
 }) {
   return (
-    <input
-      id={id}
-      className="soft-cap-input game-clock-input"
-      type="time"
-      aria-label={ariaLabel}
-      value={formatGameClockInput(value)}
-      onChange={(e) => onChange(parseGameClockTime(e.target.value))}
-    />
+    <div className="game-clock-field">
+      <input
+        id={id}
+        className="game-clock-input"
+        type="time"
+        aria-label={ariaLabel}
+        value={formatGameClockInput(value)}
+        onChange={(e) => onChange(parseGameClockTime(e.target.value))}
+      />
+    </div>
   );
 }
