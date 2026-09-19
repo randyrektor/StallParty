@@ -327,15 +327,12 @@ export function SettingsModal({
             </div>
             <div style={styles.cardContent}>
               <label style={styles.label}>Players per point</label>
-              <div className="settings-lineup-row" style={{ ...styles.lineupSizeRow, marginBottom: 16 }}>
+              <div className="line-setup-pills" style={{ marginBottom: 16 }}>
                 {LINEUP_SIZE_OPTIONS.map((n) => (
                   <button
                     key={n}
                     type="button"
-                    style={{
-                      ...styles.lineupSizeButton,
-                      ...(localLineupSize === n ? styles.lineupSizeButtonActive : {}),
-                    }}
+                    className={`line-setup-pill${localLineupSize === n ? ' is-active' : ''}`}
                     onClick={() => {
                       setLocalLineupSize(n);
                       setLocalStartingOpen((open) => clampOpenCount(open, n));
@@ -378,34 +375,23 @@ export function SettingsModal({
                 </button>
               </div>
               <label style={{ ...styles.label, marginTop: 16 }}>Cycle</label>
-              <div className="settings-cycle-row" style={styles.cycleRow}>
+              <div className="line-setup-pills">
                 {CYCLE_OPTIONS.map((opt) => {
                   const cycleLocked = !isSplitCycleAvailable(localLineupSize, openCount, opt.value);
-                  const isActive = localSplitCycle === opt.value;
                   return (
                     <button
                       key={opt.value}
                       type="button"
+                      className={`line-setup-pill${localSplitCycle === opt.value ? ' is-active' : ''}`}
                       disabled={cycleLocked}
                       aria-disabled={cycleLocked}
-                      style={{
-                        ...styles.lineupSizeButton,
-                        ...(isActive ? styles.lineupSizeButtonActive : {}),
-                        ...(cycleLocked ? styles.cycleButtonDisabled : {}),
-                      }}
+                      title={opt.hint}
                       onClick={() => {
                         if (cycleLocked) return;
                         setLocalSplitCycle(opt.value);
                       }}
                     >
-                      <span style={{
-                        ...styles.ratioLabel,
-                        ...(cycleLocked ? styles.cycleButtonDisabledText : {}),
-                      }}>{opt.label}</span>
-                      <span style={{
-                        ...styles.ratioDescription,
-                        ...(cycleLocked ? styles.cycleButtonDisabledText : {}),
-                      }}>{opt.hint}</span>
+                      {opt.label}
                     </button>
                   );
                 })}
@@ -419,32 +405,32 @@ export function SettingsModal({
             </div>
             <div style={styles.cardContent}>
               <div className="settings-clocks">
-                <label style={styles.label} htmlFor="settings-soft-cap">
-                  Score to
+                <label className="settings-clock" htmlFor="settings-soft-cap">
+                  <span>Score to</span>
+                  <SoftCapInput
+                    id="settings-soft-cap"
+                    value={localSoftCap}
+                    onChange={setLocalSoftCap}
+                  />
                 </label>
-                <label style={styles.label} htmlFor="settings-half-at">
-                  Half at
+                <label className="settings-clock" htmlFor="settings-half-at">
+                  <span>Half at</span>
+                  <GameClockInput
+                    id="settings-half-at"
+                    value={localHalfAt}
+                    onChange={setLocalHalfAt}
+                    ariaLabel="Halftime reminder"
+                  />
                 </label>
-                <label style={styles.label} htmlFor="settings-end-at">
-                  End at
+                <label className="settings-clock" htmlFor="settings-end-at">
+                  <span>End at</span>
+                  <GameClockInput
+                    id="settings-end-at"
+                    value={localEndAt}
+                    onChange={setLocalEndAt}
+                    ariaLabel="Game end reminder"
+                  />
                 </label>
-                <SoftCapInput
-                  id="settings-soft-cap"
-                  value={localSoftCap}
-                  onChange={setLocalSoftCap}
-                />
-                <GameClockInput
-                  id="settings-half-at"
-                  value={localHalfAt}
-                  onChange={setLocalHalfAt}
-                  ariaLabel="Halftime reminder"
-                />
-                <GameClockInput
-                  id="settings-end-at"
-                  value={localEndAt}
-                  onChange={setLocalEndAt}
-                  ariaLabel="Game end reminder"
-                />
               </div>
               <div style={styles.matchAdmin}>
                 {onChangeTeam && (

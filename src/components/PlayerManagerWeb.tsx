@@ -603,25 +603,25 @@ function LineSetup({
               </button>
             </div>
           </div>
-          <div className="line-setup-group line-setup-group--clocks">
-            <span className="line-setup-label">
-              Score and time <span className="line-setup-optional">(optional)</span>
-            </span>
-            <div className="line-setup-clocks">
-              <label className="line-setup-clock">
-                <span>Score to</span>
-                <SoftCapInput value={softCap} onChange={onSoftCapChange} />
-              </label>
-              <label className="line-setup-clock">
-                <span>Half at</span>
-                <GameClockInput value={halfAt} onChange={onHalfAtChange} ariaLabel="Halftime reminder" />
-              </label>
-              <label className="line-setup-clock">
-                <span>End at</span>
-                <GameClockInput value={endAt} onChange={onEndAtChange} ariaLabel="Game end reminder" />
-              </label>
-            </div>
-          </div>
+        </div>
+      </div>
+      <div className="line-setup-group line-setup-group--clocks">
+        <span className="line-setup-label">
+          Score and time <span className="line-setup-optional">(optional)</span>
+        </span>
+        <div className="line-setup-clocks">
+          <label className="line-setup-clock">
+            <span>Score to</span>
+            <SoftCapInput value={softCap} onChange={onSoftCapChange} />
+          </label>
+          <label className="line-setup-clock">
+            <span>Half at</span>
+            <GameClockInput value={halfAt} onChange={onHalfAtChange} ariaLabel="Halftime reminder" />
+          </label>
+          <label className="line-setup-clock">
+            <span>End at</span>
+            <GameClockInput value={endAt} onChange={onEndAtChange} ariaLabel="Game end reminder" />
+          </label>
         </div>
       </div>
     </div>
@@ -826,21 +826,19 @@ export function PlayerManagerWeb({
             </button>
           )}
           {gameStarted && (
-            <>
-              <button type="button" className="btn btn-ghost" onClick={onOpenScoreboard}>
-                Scoreboard
-              </button>
-              {onOpenSettings && (
-                <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
-                  Settings
-                </button>
-              )}
-            </>
+            <button type="button" className="btn btn-ghost" onClick={onOpenScoreboard}>
+              Scoreboard
+            </button>
           )}
         </>
       }
       right={
         <>
+          {gameStarted && onOpenSettings && (
+            <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
+              Settings
+            </button>
+          )}
           {isEditMode && (
             <button type="button" className="btn btn-primary" onClick={() => setIsEditMode(false)}>
               Done

@@ -16,11 +16,14 @@ export function GenderCyclePills({
   const active = ((lineIndex % len) + len) % len;
   return (
     <div className="line-info-pattern">
-      <div className="pattern-display">
+      <div className="line-setup-pills pattern-display" role="group" aria-label="Gender cycle">
         {letters.map((letter, i) => (
-          <div key={i} className={`pattern-item${active === i ? ' is-active' : ''}`}>
-            <span>{letter}</span>
-          </div>
+          <span
+            key={i}
+            className={`line-setup-pill pattern-item${active === i ? ' is-active' : ''}`}
+          >
+            {letter}
+          </span>
         ))}
       </div>
     </div>
