@@ -47,6 +47,12 @@ function withSecurityHeaders(response: Response): Response {
   });
 }
 
+const CRAWL_TYPES: Record<string, string> = {
+  '/robots.txt': 'text/plain; charset=utf-8',
+  '/sitemap.xml': 'application/xml; charset=utf-8',
+  '/sitemap.txt': 'text/plain; charset=utf-8',
+};
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -55,6 +61,20 @@ export default {
       if (!room) return new Response('bad-room', { status: 400 });
       const stub = env.ROOMS.get(env.ROOMS.idFromName(room));
       return stub.fetch(request);
+    }
+    if (url.pathname === '/sitemap.xml/' || url.pathname === '/sitemap.txt/') {
+      return Response.redirect(`${url.origin}${url.pathname.slice(0, -1)}`, 301);
+    }
+    const crawlType = CRAWL_TYPES[url.pathname];
+    if (crawlType && env.ASSETS) {
+      const asset = await env.ASSETS.fetch(new Request(new URL(url.pathname, url.origin), request));
+      if (asset.ok) {
+        const headers = new Headers(asset.headers);
+        headers.set('Content-Type', crawlType);
+        headers.set('X-Content-Type-Options', 'nosniff');
+        headers.set('Cache-Control', 'public, max-age=300');
+        return new Response(asset.body, { status: 200, headers });
+      }
     }
     if (env.ASSETS) return withSecurityHeaders(await env.ASSETS.fetch(request));
     return new Response('Not found', { status: 404 });
