@@ -1,14 +1,50 @@
 import {
+  allowWatchRate,
   applyWatchMessage,
+  isWatchPayloadTooLarge,
   nextRoomAlarm,
   normalizeRoomId,
   parseClientMessage,
+  WATCH_MAX_SOCKETS,
   type RoomState,
 } from '../src/utils/watchRoom';
+import { sanitizeSpectatorSnapshot } from '../src/utils/spectatorState';
 
 export interface Env {
   ROOMS: DurableObjectNamespace;
   ASSETS?: Fetcher;
+}
+
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self' 'sha256-T6yU/ugci+IZY5eYdxlBh7P0PyzqfyxlXQL2n+KJlAA='",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "font-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    'upgrade-insecure-requests',
+  ].join('; '),
+};
+
+function withSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export default {
@@ -20,12 +56,12 @@ export default {
       const stub = env.ROOMS.get(env.ROOMS.idFromName(room));
       return stub.fetch(request);
     }
-    if (env.ASSETS) return env.ASSETS.fetch(request);
+    if (env.ASSETS) return withSecurityHeaders(await env.ASSETS.fetch(request));
     return new Response('Not found', { status: 404 });
   },
 };
 
-type SocketMeta = { role?: 'host' | 'viewer' };
+type SocketMeta = { role?: 'host' | 'viewer'; windowStart?: number; count?: number };
 
 export class WatchRoom {
   private ctx: DurableObjectState;
@@ -39,12 +75,26 @@ export class WatchRoom {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket', { status: 426 });
     }
+    if (this.ctx.getWebSockets().length >= WATCH_MAX_SOCKETS) {
+      return new Response('room-full', { status: 503 });
+    }
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1]);
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    if (isWatchPayloadTooLarge(message)) {
+      ws.close(1009, 'too-big');
+      return;
+    }
+    const meta = (ws.deserializeAttachment() as SocketMeta | null) ?? {};
+    const rate = allowWatchRate(Date.now(), meta);
+    ws.serializeAttachment({ ...meta, windowStart: rate.windowStart, count: rate.count });
+    if (!rate.ok) {
+      ws.close(1008, 'rate');
+      return;
+    }
     const parsed = parseClientMessage(typeof message === 'string' ? message : new TextDecoder().decode(message));
     if (!parsed) {
       ws.send(JSON.stringify({ type: 'error', error: 'bad-message' }));
@@ -69,13 +119,15 @@ export class WatchRoom {
     });
     const alarmAt = nextRoomAlarm(now, createdAt, now);
     if (alarmAt != null) await this.ctx.storage.setAlarm(alarmAt);
-    if (result.role) ws.serializeAttachment({ role: result.role } satisfies SocketMeta);
+    const latest = (ws.deserializeAttachment() as SocketMeta | null) ?? {};
+    if (result.role) latest.role = result.role;
+    ws.serializeAttachment(latest);
     ws.send(JSON.stringify(result.reply));
     if (result.broadcast) {
       const payload = JSON.stringify(result.broadcast);
       for (const client of this.ctx.getWebSockets()) {
-        const meta = client.deserializeAttachment() as SocketMeta | undefined;
-        if (meta?.role === 'viewer') client.send(payload);
+        const clientMeta = client.deserializeAttachment() as SocketMeta | undefined;
+        if (clientMeta?.role === 'viewer') client.send(payload);
       }
     }
   }
@@ -120,7 +172,7 @@ export class WatchRoom {
     const stored = await this.ctx.storage.get(['key', 'snap']);
     return {
       key: (stored.get('key') as string | undefined) ?? null,
-      snap: (stored.get('snap') as RoomState['snap']) ?? null,
+      snap: sanitizeSpectatorSnapshot(stored.get('snap')) ?? null,
     };
   }
 }

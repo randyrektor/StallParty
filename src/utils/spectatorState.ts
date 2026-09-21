@@ -1,9 +1,14 @@
 import type { LineupSize, SplitCycle } from '../types';
 import { getGenderPattern, isSplitCycleAvailable } from './rotationHelpers';
-import type { SoftPointCap } from './softCap';
+import { parseSoftCap, type SoftPointCap } from './softCap';
 import { parseGameClockTime, type GameClockTime } from './gameClock';
 
 export const SPECTATOR_SNAPSHOT_VERSION = 2 as const;
+export const SPECTATOR_NAME_MAX = 80;
+const SPECTATOR_SCORE_MAX = 99;
+const SPECTATOR_POINT_MAX = 199;
+const SPECTATOR_LINE_MAX = 999;
+const SPECTATOR_GENDER_MAX = 7;
 
 export type SpectatorLinkStatus = 'preview' | 'snapshot' | 'live' | 'reconnecting';
 
@@ -37,6 +42,14 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function clampInt(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+export function sanitizeTeamName(name: string): string {
+  return name.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, SPECTATOR_NAME_MAX);
+}
+
 export function buildSpectatorSnapshot(input: {
   us: string;
   them: string;
@@ -59,11 +72,11 @@ export function buildSpectatorSnapshot(input: {
   const nextPoint = getGenderPattern(input.lineIndex + 1, input.lineupSize, input.startingOpen, cycle);
   return {
     v: SPECTATOR_SNAPSHOT_VERSION,
-    us: input.us,
-    them: input.them,
-    s1: input.s1,
-    s2: input.s2,
-    point: input.point,
+    us: sanitizeTeamName(input.us),
+    them: sanitizeTeamName(input.them),
+    s1: clampInt(input.s1, 0, SPECTATOR_SCORE_MAX),
+    s2: clampInt(input.s2, 0, SPECTATOR_SCORE_MAX),
+    point: clampInt(input.point, 1, SPECTATOR_POINT_MAX),
     thisOpen: thisPoint.men,
     thisWomen: thisPoint.women,
     nextOpen: nextPoint.men,
@@ -99,22 +112,16 @@ function fromBase64Url(raw: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-function normalizeSoftCap(value: unknown): SoftPointCap {
-  if (value == null) return null;
-  if (!isFiniteNumber(value)) return null;
-  return value;
-}
-
 function fromV1(parsed: Record<string, unknown>): SpectatorSnapshot | null {
   if (typeof parsed.us !== 'string' || typeof parsed.them !== 'string') return null;
   if (!isFiniteNumber(parsed.s1) || !isFiniteNumber(parsed.s2)) return null;
   return {
     v: SPECTATOR_SNAPSHOT_VERSION,
-    us: parsed.us,
-    them: parsed.them,
-    s1: parsed.s1,
-    s2: parsed.s2,
-    point: isFiniteNumber(parsed.point) ? parsed.point : 1,
+    us: sanitizeTeamName(parsed.us),
+    them: sanitizeTeamName(parsed.them),
+    s1: clampInt(parsed.s1, 0, SPECTATOR_SCORE_MAX),
+    s2: clampInt(parsed.s2, 0, SPECTATOR_SCORE_MAX),
+    point: isFiniteNumber(parsed.point) ? clampInt(parsed.point, 1, SPECTATOR_POINT_MAX) : 1,
     thisOpen: 0,
     thisWomen: 0,
     nextOpen: 0,
@@ -144,22 +151,30 @@ function fromV2(parsed: Record<string, unknown>): SpectatorSnapshot | null {
   if (!isSplitCycle(parsed.splitCycle)) return null;
   return {
     v: SPECTATOR_SNAPSHOT_VERSION,
-    us: parsed.us,
-    them: parsed.them,
-    s1: parsed.s1,
-    s2: parsed.s2,
-    point: parsed.point,
-    thisOpen: parsed.thisOpen,
-    thisWomen: parsed.thisWomen,
-    nextOpen: parsed.nextOpen,
-    nextWomen: parsed.nextWomen,
+    us: sanitizeTeamName(parsed.us),
+    them: sanitizeTeamName(parsed.them),
+    s1: clampInt(parsed.s1, 0, SPECTATOR_SCORE_MAX),
+    s2: clampInt(parsed.s2, 0, SPECTATOR_SCORE_MAX),
+    point: clampInt(parsed.point, 1, SPECTATOR_POINT_MAX),
+    thisOpen: clampInt(parsed.thisOpen, 0, SPECTATOR_GENDER_MAX),
+    thisWomen: clampInt(parsed.thisWomen, 0, SPECTATOR_GENDER_MAX),
+    nextOpen: clampInt(parsed.nextOpen, 0, SPECTATOR_GENDER_MAX),
+    nextWomen: clampInt(parsed.nextWomen, 0, SPECTATOR_GENDER_MAX),
     splitCycle: parsed.splitCycle,
-    lineIndex: isFiniteNumber(parsed.lineIndex) ? parsed.lineIndex : 0,
-    softCap: normalizeSoftCap(parsed.softCap),
+    lineIndex: isFiniteNumber(parsed.lineIndex) ? clampInt(parsed.lineIndex, 0, SPECTATOR_LINE_MAX) : 0,
+    softCap: parseSoftCap(parsed.softCap),
     halfAt: parseGameClockTime(parsed.halfAt),
     endAt: parseGameClockTime(parsed.endAt),
-    updatedAt: isFiniteNumber(parsed.updatedAt) ? parsed.updatedAt : 0,
+    updatedAt: isFiniteNumber(parsed.updatedAt) ? Math.max(0, Math.round(parsed.updatedAt)) : 0,
   };
+}
+
+export function sanitizeSpectatorSnapshot(value: unknown): SpectatorSnapshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (record.v === 1) return fromV1(record);
+  if (record.v === SPECTATOR_SNAPSHOT_VERSION) return fromV2(record);
+  return null;
 }
 
 export function encodeSpectatorSnapshot(snap: SpectatorSnapshot): string {
@@ -168,12 +183,7 @@ export function encodeSpectatorSnapshot(snap: SpectatorSnapshot): string {
 
 export function decodeSpectatorSnapshot(raw: string): SpectatorSnapshot | null {
   try {
-    const parsed = JSON.parse(fromBase64Url(raw)) as unknown;
-    if (!parsed || typeof parsed !== 'object') return null;
-    const record = parsed as Record<string, unknown>;
-    if (record.v === 1) return fromV1(record);
-    if (record.v === SPECTATOR_SNAPSHOT_VERSION) return fromV2(record);
-    return null;
+    return sanitizeSpectatorSnapshot(JSON.parse(fromBase64Url(raw)));
   } catch {
     return null;
   }
@@ -191,6 +201,3 @@ export function parseSpectatorHash(hash: string): SpectatorSnapshot | null {
   return decodeSpectatorSnapshot(trimmed.slice(HASH_PREFIX.length));
 }
 
-export function qrImageUrl(data: string, size = 240): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
-}

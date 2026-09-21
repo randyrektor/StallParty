@@ -3,7 +3,7 @@
 name = "stall-party"
 main = "workers/watch.ts"
 compatibility_date = "2025-09-18"
-workers_dev = true
+workers_dev = false
 
 [[routes]]
 pattern = "stall.party"

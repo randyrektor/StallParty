@@ -1,11 +1,16 @@
 import type { SpectatorSnapshot } from './spectatorState';
-import { decodeSpectatorSnapshot } from './spectatorState';
+import { decodeSpectatorSnapshot, sanitizeSpectatorSnapshot } from './spectatorState';
 
 export const WATCH_ROOM_PREFIX = 'watch/';
 export const WATCH_SNAP_PREFIX = 'watch=';
 export const WATCH_ROOM_ID_LENGTH = 6;
 export const WATCH_ROOM_IDLE_MS = 4 * 60 * 60 * 1000;
 export const WATCH_ROOM_MAX_MS = 8 * 60 * 60 * 1000;
+export const WATCH_MESSAGE_MAX_BYTES = 8_192;
+export const WATCH_MAX_SOCKETS = 64;
+export const WATCH_MAX_MESSAGES_PER_WINDOW = 30;
+export const WATCH_RATE_WINDOW_MS = 1_000;
+export const WATCH_KEY_MAX_LENGTH = 128;
 const ROOM_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 export type WatchHash =
@@ -213,20 +218,39 @@ export function nextRoomAlarm(
   return deadline;
 }
 
+export function isWatchPayloadTooLarge(raw: string | ArrayBuffer): boolean {
+  const bytes = typeof raw === 'string' ? new TextEncoder().encode(raw).byteLength : raw.byteLength;
+  return bytes > WATCH_MESSAGE_MAX_BYTES;
+}
+
+export function allowWatchRate(
+  now: number,
+  prev: { windowStart?: number; count?: number },
+  limit = WATCH_MAX_MESSAGES_PER_WINDOW,
+  windowMs = WATCH_RATE_WINDOW_MS
+): { ok: boolean; windowStart: number; count: number } {
+  const windowStart = prev.windowStart ?? now;
+  if (now - windowStart >= windowMs) {
+    return { ok: true, windowStart: now, count: 1 };
+  }
+  const count = (prev.count ?? 0) + 1;
+  return { ok: count <= limit, windowStart, count };
+}
+
+function isWriteKey(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= WATCH_KEY_MAX_LENGTH;
+}
+
 export function parseClientMessage(raw: string): WatchClientMessage | null {
   try {
     const msg = JSON.parse(raw) as WatchClientMessage;
     if (!msg || typeof msg !== 'object') return null;
-    if (msg.type === 'host' && typeof msg.room === 'string' && typeof msg.key === 'string') return msg;
+    if (msg.type === 'host' && typeof msg.room === 'string' && isWriteKey(msg.key)) return msg;
     if (msg.type === 'join' && typeof msg.room === 'string') return msg;
-    if (
-      msg.type === 'put' &&
-      typeof msg.room === 'string' &&
-      typeof msg.key === 'string' &&
-      msg.snap &&
-      typeof msg.snap === 'object'
-    ) {
-      return msg;
+    if (msg.type === 'put' && typeof msg.room === 'string' && isWriteKey(msg.key)) {
+      const snap = sanitizeSpectatorSnapshot(msg.snap);
+      if (!snap) return null;
+      return { type: 'put', room: msg.room, key: msg.key, snap };
     }
     return null;
   } catch {

@@ -4,6 +4,7 @@ import {
   encodeSpectatorSnapshot,
   decodeSpectatorSnapshot,
   parseSpectatorHash,
+  sanitizeSpectatorSnapshot,
   snapshotShowsGender,
 } from './spectatorState';
 
@@ -143,5 +144,28 @@ describe('spectator snapshot encoding', () => {
     const decoded = decodeSpectatorSnapshot(encodeSpectatorSnapshot(legacy as never));
     expect(decoded?.halfAt).toBeNull();
     expect(decoded?.endAt).toBeNull();
+  });
+
+  it('truncates team names and drops extra snapshot fields', () => {
+    const decoded = sanitizeSpectatorSnapshot({
+      v: 2,
+      us: `  ${'A'.repeat(120)}  `,
+      them: 'B',
+      s1: 1e6,
+      s2: -3,
+      point: 0,
+      thisOpen: 99,
+      thisWomen: 1,
+      nextOpen: 4,
+      nextWomen: 3,
+      splitCycle: 'same',
+      junk: 'nope',
+    });
+    expect(decoded?.us).toHaveLength(80);
+    expect(decoded?.s1).toBe(99);
+    expect(decoded?.s2).toBe(0);
+    expect(decoded?.point).toBe(1);
+    expect(decoded?.thisOpen).toBe(7);
+    expect(decoded && 'junk' in decoded).toBe(false);
   });
 });

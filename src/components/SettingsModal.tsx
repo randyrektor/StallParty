@@ -10,7 +10,7 @@ import {
   downloadTextFile,
 } from '../utils/scoreReport';
 import { shareScoreOgImage } from '../utils/scoreShareImage';
-import { qrImageUrl } from '../utils/spectatorState';
+import { QrCode } from './QrCode';
 import { type SoftPointCap } from '../utils/softCap';
 import { type GameClockTime } from '../utils/gameClock';
 import { SoftCapInput } from './SoftCapInput';
@@ -476,17 +476,10 @@ export function SettingsModal({
             </div>
             <div style={styles.cardContent}>
               <p style={styles.spectatorHint}>
-                Team members or opponents can scan for a live scoreboard.
+                Team members or opponents can scan for a live scoreboard. Anyone with the
+                link sees the score and team names; the roster stays on this device.
               </p>
-              {spectatorLink && (
-                <img
-                  alt="Spectator QR code"
-                  src={qrImageUrl(spectatorLink)}
-                  width={180}
-                  height={180}
-                  style={styles.qrImage}
-                />
-              )}
+              {spectatorLink && <QrCode value={spectatorLink} label="Spectator QR code" />}
               {typeof navigator.share === 'function' && spectatorLink && (
                 <div style={styles.compactActions}>
                   <button type="button" style={styles.compactAction} onClick={handleShareSpectatorLink}>
@@ -865,13 +858,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     color: COLORS.textSecondary,
     lineHeight: 1.4,
-  },
-  qrImage: {
-    display: 'block',
-    margin: '0 auto 12px',
-    background: '#fff',
-    borderRadius: '8px',
-    padding: '8px',
   },
   compactActionDanger: {
     flex: '1 1 auto',

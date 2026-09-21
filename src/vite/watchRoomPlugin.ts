@@ -1,6 +1,11 @@
 import type { Plugin } from 'vite';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { createWatchStore, parseClientMessage, type WatchSink } from '../utils/watchRoom';
+import {
+  createWatchStore,
+  isWatchPayloadTooLarge,
+  parseClientMessage,
+  type WatchSink,
+} from '../utils/watchRoom';
 
 const PATH = '/watch-ws';
 
@@ -12,7 +17,12 @@ function attachClient(
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(msg));
   };
   socket.on('message', (data) => {
-    const msg = parseClientMessage(String(data));
+    const raw = String(data);
+    if (isWatchPayloadTooLarge(raw)) {
+      sink({ type: 'error', error: 'bad-message' });
+      return;
+    }
+    const msg = parseClientMessage(raw);
     if (!msg) {
       sink({ type: 'error', error: 'bad-message' });
       return;
