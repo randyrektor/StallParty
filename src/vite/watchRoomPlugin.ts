@@ -27,8 +27,8 @@ function attachClient(
       sink({ type: 'error', error: 'bad-message' });
       return;
     }
-    if (msg.type === 'host') sink(store.host(msg.room, msg.key, sink));
-    else if (msg.type === 'join') sink(store.join(msg.room, sink));
+    if (msg.type === 'host') sink(store.host(msg.room, msg.key, sink, msg.view));
+    else if (msg.type === 'join') sink(store.join(msg.room, sink, msg.view));
     else if (msg.type === 'put') sink(store.put(msg.room, msg.key, msg.snap));
   });
   socket.on('close', () => store.drop(sink));

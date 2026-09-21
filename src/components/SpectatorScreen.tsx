@@ -3,6 +3,7 @@ import { APP_NAME, APP_URL } from '../constants';
 import { AppShell } from './AppShell';
 import {
   snapshotShowsGender,
+  type SpectatorLinePlayer,
   type SpectatorLinkStatus,
   type SpectatorSnapshot,
 } from '../utils/spectatorState';
@@ -11,17 +12,28 @@ import { activeClockReminder, clockReminderCopy } from '../utils/gameClock';
 import { useNowTick } from '../hooks/useNowTick';
 import { GenderCyclePills } from './GenderCyclePills';
 
-function statusCopy(status: SpectatorLinkStatus): { kicker: string; hint: string } {
+function statusCopy(
+  status: SpectatorLinkStatus,
+  audience: 'public' | 'team'
+): { kicker: string; hint: string } {
   if (status === 'preview') {
-    return {
-      kicker: 'Preview on this phone',
-      hint: 'This is the reader opponents will see. Close to go back to scoring.',
-    };
+    return audience === 'team'
+      ? {
+          kicker: 'Preview on this phone',
+          hint: 'This is the reader teammates will see, including the line. Close to go back to scoring.',
+        }
+      : {
+          kicker: 'Preview on this phone',
+          hint: 'This is the reader opponents will see. Close to go back to scoring.',
+        };
   }
   if (status === 'live') {
     return {
       kicker: 'Live',
-      hint: 'Score updates from the sideline. Leave this tab open.',
+      hint:
+        audience === 'team'
+          ? 'Score and line update from the sideline. Leave this tab open.'
+          : 'Score updates from the sideline. Leave this tab open.',
     };
   }
   if (status === 'reconnecting') {
@@ -34,6 +46,44 @@ function statusCopy(status: SpectatorLinkStatus): { kicker: string; hint: string
     kicker: 'Snapshot',
     hint: 'This copy does not update. Use a live room link from Settings.',
   };
+}
+
+function LineChips({
+  label,
+  players,
+  variant,
+}: {
+  label: string;
+  players: SpectatorLinePlayer[];
+  variant: 'this' | 'next';
+}) {
+  const open = players.filter((player) => player.g === 'O');
+  const women = players.filter((player) => player.g === 'W');
+  return (
+    <div className={`spectator-line spectator-line--${variant}`}>
+      <div className="spectator-split-label">{label}</div>
+      <div className="spectator-name-rows">
+        {open.length > 0 && (
+          <div className="spectator-name-row" aria-label={`${label} open`}>
+            {open.map((player, index) => (
+              <span key={`${player.g}-${index}-${player.name}`} className="spectator-name spectator-name--open">
+                {player.name}
+              </span>
+            ))}
+          </div>
+        )}
+        {women.length > 0 && (
+          <div className="spectator-name-row" aria-label={`${label} women`}>
+            {women.map((player, index) => (
+              <span key={`${player.g}-${index}-${player.name}`} className="spectator-name spectator-name--women">
+                {player.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function GenderSplit({
@@ -79,13 +129,15 @@ function GenderSplit({
 export function SpectatorScreen({
   snapshot,
   linkStatus = 'snapshot',
+  audience = 'public',
   onLeave,
 }: {
   snapshot: SpectatorSnapshot | null;
   linkStatus?: SpectatorLinkStatus;
+  audience?: 'public' | 'team';
   onLeave?: () => void;
 }) {
-  const copy = statusCopy(linkStatus);
+  const copy = statusCopy(linkStatus, audience);
   const now = useNowTick();
   const clockReminder = snapshot
     ? activeClockReminder(snapshot.halfAt ?? null, snapshot.endAt ?? null, new Date(now))
@@ -111,7 +163,8 @@ export function SpectatorScreen({
     );
   }
   const capReached = isSoftCapReached(snapshot.s1, snapshot.s2, snapshot.softCap);
-  const showGender = snapshotShowsGender(snapshot);
+  const showNames = Boolean(snapshot.line?.length || snapshot.next?.length);
+  const showGender = snapshotShowsGender(snapshot) && !showNames;
 
   return (
     <AppShell
@@ -159,6 +212,16 @@ export function SpectatorScreen({
         {showGender && (
           <div className="spectator-gender">
             <GenderSplit label="This point" open={snapshot.thisOpen} women={snapshot.thisWomen} />
+          </div>
+        )}
+        {showNames && (
+          <div className="spectator-names">
+            {snapshot.line && snapshot.line.length > 0 && (
+              <LineChips label="This line" players={snapshot.line} variant="this" />
+            )}
+            {snapshot.next && snapshot.next.length > 0 && (
+              <LineChips label="Next" players={snapshot.next} variant="next" />
+            )}
           </div>
         )}
         <p className="spectator-hint">{copy.hint}</p>

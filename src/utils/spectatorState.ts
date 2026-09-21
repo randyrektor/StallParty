@@ -9,8 +9,15 @@ const SPECTATOR_SCORE_MAX = 99;
 const SPECTATOR_POINT_MAX = 199;
 const SPECTATOR_LINE_MAX = 999;
 const SPECTATOR_GENDER_MAX = 7;
+const SPECTATOR_PLAYER_MAX = 40;
+const SPECTATOR_LINE_NAMES = 7;
 
 export type SpectatorLinkStatus = 'preview' | 'snapshot' | 'live' | 'reconnecting';
+
+export type SpectatorLinePlayer = {
+  name: string;
+  g: 'O' | 'W';
+};
 
 export type SpectatorSnapshot = {
   v: typeof SPECTATOR_SNAPSHOT_VERSION;
@@ -29,6 +36,10 @@ export type SpectatorSnapshot = {
   halfAt: GameClockTime;
   endAt: GameClockTime;
   updatedAt: number;
+  /** Current line. Present only on the team view. */
+  line?: SpectatorLinePlayer[];
+  /** Next line. Present only on the team view. */
+  next?: SpectatorLinePlayer[];
 };
 
 const HASH_PREFIX = 'watch=';
@@ -50,6 +61,32 @@ export function sanitizeTeamName(name: string): string {
   return name.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, SPECTATOR_NAME_MAX);
 }
 
+export function sanitizeLineNames(value: unknown): SpectatorLinePlayer[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const players: SpectatorLinePlayer[] = [];
+  for (const item of value) {
+    if (players.length >= SPECTATOR_LINE_NAMES) break;
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const rawName = typeof record.name === 'string' ? record.name : '';
+    const name = sanitizeTeamName(rawName).slice(0, SPECTATOR_PLAYER_MAX);
+    const gender = record.g === 'W' || record.g === 'O' ? record.g : null;
+    if (!name || !gender) continue;
+    players.push({ name, g: gender });
+  }
+  return players.length > 0 ? players : undefined;
+}
+
+/** Opponent sockets receive the score without line names. */
+export function spectatorSnapshotForAudience(
+  snap: SpectatorSnapshot | null,
+  audience: 'public' | 'team'
+): SpectatorSnapshot | null {
+  if (!snap || audience === 'team' || (!snap.line && !snap.next)) return snap;
+  const { line: _line, next: _next, ...rest } = snap;
+  return rest;
+}
+
 export function buildSpectatorSnapshot(input: {
   us: string;
   them: string;
@@ -64,12 +101,16 @@ export function buildSpectatorSnapshot(input: {
   halfAt?: GameClockTime;
   endAt?: GameClockTime;
   now?: number;
+  line?: SpectatorLinePlayer[];
+  next?: SpectatorLinePlayer[];
 }): SpectatorSnapshot {
   const cycle = isSplitCycleAvailable(input.lineupSize, input.startingOpen, input.splitCycle)
     ? input.splitCycle
     : 'same';
   const thisPoint = getGenderPattern(input.lineIndex, input.lineupSize, input.startingOpen, cycle);
   const nextPoint = getGenderPattern(input.lineIndex + 1, input.lineupSize, input.startingOpen, cycle);
+  const line = sanitizeLineNames(input.line);
+  const next = sanitizeLineNames(input.next);
   return {
     v: SPECTATOR_SNAPSHOT_VERSION,
     us: sanitizeTeamName(input.us),
@@ -87,6 +128,8 @@ export function buildSpectatorSnapshot(input: {
     halfAt: input.halfAt ?? null,
     endAt: input.endAt ?? null,
     updatedAt: input.now ?? Date.now(),
+    ...(line ? { line } : {}),
+    ...(next ? { next } : {}),
   };
 }
 
@@ -166,6 +209,16 @@ function fromV2(parsed: Record<string, unknown>): SpectatorSnapshot | null {
     halfAt: parseGameClockTime(parsed.halfAt),
     endAt: parseGameClockTime(parsed.endAt),
     updatedAt: isFiniteNumber(parsed.updatedAt) ? Math.max(0, Math.round(parsed.updatedAt)) : 0,
+    ...lineFields(parsed),
+  };
+}
+
+function lineFields(parsed: Record<string, unknown>): { line?: SpectatorLinePlayer[]; next?: SpectatorLinePlayer[] } {
+  const line = sanitizeLineNames(parsed.line);
+  const next = sanitizeLineNames(parsed.next);
+  return {
+    ...(line ? { line } : {}),
+    ...(next ? { next } : {}),
   };
 }
 

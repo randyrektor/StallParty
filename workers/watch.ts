@@ -96,7 +96,7 @@ export default {
   },
 };
 
-type SocketMeta = { role?: 'host' | 'viewer'; windowStart?: number; count?: number };
+type SocketMeta = { role?: 'host' | 'viewer' | 'team'; windowStart?: number; count?: number };
 
 export class WatchRoom {
   private ctx: DurableObjectState;
@@ -148,6 +148,7 @@ export class WatchRoom {
     const createdAt = ((await this.ctx.storage.get<number>('createdAt')) ?? now);
     await this.ctx.storage.put({
       key: result.room.key,
+      viewKey: result.room.viewKey,
       snap: result.room.snap,
       createdAt,
       lastActive: now,
@@ -159,10 +160,12 @@ export class WatchRoom {
     ws.serializeAttachment(latest);
     ws.send(JSON.stringify(result.reply));
     if (result.broadcast) {
-      const payload = JSON.stringify(result.broadcast);
+      const publicPayload = JSON.stringify(result.broadcast.public);
+      const teamPayload = JSON.stringify(result.broadcast.team);
       for (const client of this.ctx.getWebSockets()) {
         const clientMeta = client.deserializeAttachment() as SocketMeta | undefined;
-        if (clientMeta?.role === 'viewer') client.send(payload);
+        if (clientMeta?.role === 'team') client.send(teamPayload);
+        else if (clientMeta?.role === 'viewer') client.send(publicPayload);
       }
     }
   }
@@ -204,9 +207,11 @@ export class WatchRoom {
   }
 
   private async load(): Promise<RoomState> {
-    const stored = await this.ctx.storage.get(['key', 'snap']);
+    const stored = await this.ctx.storage.get(['key', 'viewKey', 'snap']);
+    const viewKey = stored.get('viewKey');
     return {
       key: (stored.get('key') as string | undefined) ?? null,
+      viewKey: typeof viewKey === 'string' ? viewKey : null,
       snap: sanitizeSpectatorSnapshot(stored.get('snap')) ?? null,
     };
   }

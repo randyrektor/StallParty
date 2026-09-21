@@ -12,6 +12,9 @@ export type PersistedScoreEvent = {
   womenIndex: number;
   pendingPlayerIds: string[];
   linePlayerIds?: string[];
+  scorerId?: string;
+  throwerId?: string;
+  pullOverride?: 1 | 2;
 };
 
 export type GameSession = {
@@ -30,6 +33,11 @@ export type GameSession = {
   openIndex: number;
   womenIndex: number;
   scoreHistory: PersistedScoreEvent[];
+  /** Who pulled the first point. Missing on games started before pull tracking. */
+  openingPull?: 1 | 2 | null;
+  /** Point number where the second half began. */
+  halfPoint?: number | null;
+  startedAt?: string | null;
   lineupSize: LineupSize;
   startingOpen: number;
   splitCycle: SplitCycle;
@@ -40,6 +48,8 @@ export type GameSession = {
   setupStep: 'roster' | 'line';
   watchRoomId?: string;
   watchWriteKey?: string;
+  /** Read-only key for the teammate spectator link. Not the write key. */
+  watchViewKey?: string;
 };
 
 function isLineupSize(n: unknown): n is LineupSize {

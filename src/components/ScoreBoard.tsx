@@ -67,9 +67,18 @@ interface ScoreBoardProps {
   nextWomanQueue: Player[];
   scoreHistory: any[];
   gameStarted?: boolean;
-  onKickoff?: () => void;
+  onKickoff?: (pulling: 1 | 2) => void;
   onBackToSetup?: () => void;
   onSubstitute?: (outPlayer: Player, inPlayer: Player) => void;
+  pullLabel?: string | null;
+  tagStrip?: {
+    pointNumber: number;
+    players: Player[];
+    scorerId?: string;
+    throwerId?: string;
+  } | null;
+  onTagPlayer?: (playerId: string) => void;
+  onDismissTag?: () => void;
 }
 
 export function ScoreBoard({
@@ -102,6 +111,10 @@ export function ScoreBoard({
   onKickoff,
   onBackToSetup,
   onSubstitute,
+  pullLabel = null,
+  tagStrip = null,
+  onTagPlayer,
+  onDismissTag,
 }: ScoreBoardProps) {
   const [subOut, setSubOut] = useState<Player | null>(null);
   const [dismissedReminder, setDismissedReminder] = useState('');
@@ -123,12 +136,9 @@ export function ScoreBoard({
   const nextPattern = getGenderPattern(lineIndex + 1, lineupSize, startingOpen, splitCycle);
   const nextSeats = getLineSeats(nextOpenQueue, nextWomanQueue, nextPattern);
 
-  const scoreDiff = team1Score - team2Score;
   const capReached = isSoftCapReached(team1Score, team2Score, softCap);
   const clockReminder = activeClockReminder(halfAt, endAt, new Date(now));
   const reminderKey = clockReminder ? `${clockReminder.kind}:${clockReminder.phase}` : '';
-  const scoreDiffColor =
-    scoreDiff > 0 ? THEME.success : scoreDiff < 0 ? THEME.danger : COLORS.text;
 
   const subCandidates = subOut
     ? (() => {
@@ -232,9 +242,6 @@ export function ScoreBoard({
             <h2 className="score-team-name" style={{ position: 'relative', zIndex: 1 }}>{team1Name}</h2>
             <h1 className="score-num" style={{ position: 'relative', zIndex: 1 }}>{team1Score}</h1>
           </button>
-          <div className="score-diff score-diff--between" style={{ color: scoreDiffColor }}>
-            {scoreDiff !== 0 ? scoreDiff : '0'}
-          </div>
           <button
             ref={team2TileRef}
             className="score-tile"
@@ -268,17 +275,20 @@ export function ScoreBoard({
             aria-labelledby="kickoff-confirm-title"
           >
             <h3 id="kickoff-confirm-title" className="confirm-title">
-              Start Game
+              Who is pulling?
             </h3>
             <p className="confirm-copy">
-              This is the first line. Back to change it, or start when the disc is pulled.
+              If you score, you pull next. If they score, they pull next.
             </p>
-            <div className="confirm-actions">
-              <button type="button" className="btn btn-ghost" onClick={onBackToSetup}>
-                Back
+            <div className="confirm-actions confirm-actions--pull">
+              <button type="button" className="btn btn-primary" onClick={() => onKickoff?.(1)}>
+                {team1Name}
               </button>
-              <button type="button" className="btn btn-primary" onClick={onKickoff}>
-                Start Game
+              <button type="button" className="btn btn-primary" onClick={() => onKickoff?.(2)}>
+                {team2Name}
+              </button>
+              <button type="button" className="btn btn-ghost confirm-actions-back" onClick={onBackToSetup}>
+                Back
               </button>
             </div>
           </div>
@@ -289,14 +299,12 @@ export function ScoreBoard({
         <div className="line-info-row">
           <div className="line-info-point">
             <span>Point {pointNumber}</span>
+            {pullLabel && <span className="line-info-pull">{pullLabel}</span>}
             {softCap != null && (
               <span className={`line-info-cap${capReached ? ' is-reached' : ''}`}>
                 {formatSoftCapBadge(softCap, capReached)}
               </span>
             )}
-          </div>
-          <div className="score-diff score-diff--center" style={{ color: scoreDiffColor }}>
-            {scoreDiff !== 0 ? scoreDiff : '0'}
           </div>
           {isSplitCycleAvailable(lineupSize, startingOpen, splitCycle) && (
             <GenderCyclePills splitCycle={splitCycle} lineIndex={lineIndex} />
@@ -313,6 +321,38 @@ export function ScoreBoard({
           >
             Dismiss
           </button>
+        </div>
+      )}
+      {tagStrip && onTagPlayer && (
+        <div className="goal-tag" role="group" aria-label={`Tag point ${tagStrip.pointNumber}`}>
+          <div className="goal-tag-head">
+            <span>Point {tagStrip.pointNumber}</span>
+            <span className="goal-tag-hint">Tap scorer, then thrower</span>
+            <button type="button" className="btn btn-ghost goal-tag-done" onClick={onDismissTag}>
+              Done
+            </button>
+          </div>
+          <div className="goal-tag-names">
+            {tagStrip.players.map((player) => {
+              const role =
+                player.uuid === tagStrip.scorerId
+                  ? 'Score'
+                  : player.uuid === tagStrip.throwerId
+                    ? 'Throw'
+                    : null;
+              return (
+                <button
+                  key={player.uuid}
+                  type="button"
+                  className={`goal-tag-name${role ? ' is-tagged' : ''}`}
+                  onClick={() => onTagPlayer(player.uuid)}
+                >
+                  <span>{player.name}</span>
+                  {role && <span className="goal-tag-role">{role}</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
       <div className="line-display">

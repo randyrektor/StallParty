@@ -37,6 +37,19 @@ describe('watch room ids', () => {
   it('parses a live room hash', () => {
     expect(parseWatchHash('#watch/AB3K9X')).toEqual({ kind: 'room', roomId: 'AB3K9X' });
   });
+
+  it('parses a team view key without treating it as the room id', () => {
+    expect(parseWatchHash('#watch/AB3K9X.t.team-view-key')).toEqual({
+      kind: 'room',
+      roomId: 'AB3K9X',
+      view: 'team',
+      viewKey: 'team-view-key',
+    });
+  });
+
+  it('ignores a broken team suffix and stays on the public room', () => {
+    expect(parseWatchHash('#watch/AB3K9X.t.not a key')).toEqual({ kind: 'room', roomId: 'AB3K9X' });
+  });
 });
 
 describe('watch store', () => {
@@ -54,6 +67,43 @@ describe('watch store', () => {
     const store = createWatchStore();
     store.host('AB3K9X', 'secret', () => {});
     expect(store.put('AB3K9X', 'nope', snap)).toEqual({ type: 'error', error: 'forbidden' });
+  });
+
+  it('gives line names to the team view and strips them for opponents', () => {
+    const named = {
+      ...snap,
+      line: [
+        { name: 'Haley', g: 'W' as const },
+        { name: 'Sam', g: 'O' as const },
+      ],
+      next: [{ name: 'Ada', g: 'O' as const }],
+    };
+    const store = createWatchStore();
+    const opponents: unknown[] = [];
+    const teammates: unknown[] = [];
+    const wrongKey: unknown[] = [];
+    store.host('AB3K9X', 'secret', () => {}, 'team-view-key');
+    store.join('AB3K9X', (msg) => opponents.push(msg));
+    store.join('AB3K9X', (msg) => teammates.push(msg), 'team-view-key');
+    store.join('AB3K9X', (msg) => wrongKey.push(msg), 'write-key-secret');
+    store.put('AB3K9X', 'secret', named);
+    expect(opponents).toEqual([{ type: 'state', snap }]);
+    expect(wrongKey).toEqual([{ type: 'state', snap }]);
+    expect(teammates).toEqual([{ type: 'state', snap: named }]);
+    expect(store.put('AB3K9X', 'team-view-key', named)).toEqual({ type: 'error', error: 'forbidden' });
+  });
+
+  it('republishes when only the line names change', () => {
+    const store = createWatchStore();
+    const received: unknown[] = [];
+    store.host('AB3K9X', 'secret', () => {}, 'team-view-key');
+    store.join('AB3K9X', (msg) => received.push(msg), 'team-view-key');
+    store.put('AB3K9X', 'secret', { ...snap, line: [{ name: 'Haley', g: 'W' as const }] });
+    received.length = 0;
+    store.put('AB3K9X', 'secret', { ...snap, line: [{ name: 'Haley', g: 'W' as const }], updatedAt: 99 });
+    expect(received).toEqual([]);
+    store.put('AB3K9X', 'secret', { ...snap, line: [{ name: 'Sam', g: 'O' as const }] });
+    expect(received).toEqual([{ type: 'state', snap: { ...snap, line: [{ name: 'Sam', g: 'O' }] } }]);
   });
 
   it('does not rebroadcast an unchanged score', () => {

@@ -68,7 +68,12 @@ interface SettingsModalProps {
   onThemeChange: (theme: Theme) => void;
   onReset: () => void;
   onChangeTeam?: () => void;
+  onEndGame?: () => void;
+  hasPoints?: boolean;
+  tagGoalsLive?: boolean;
+  onTagGoalsLiveChange?: (enabled: boolean) => void;
   spectatorLink?: string;
+  teamSpectatorLink?: string;
   // Export functionality props
   team1Score: number;
   team2Score: number;
@@ -106,7 +111,12 @@ export function SettingsModal({
   onThemeChange,
   onReset,
   onChangeTeam,
+  onEndGame,
+  hasPoints = false,
+  tagGoalsLive = false,
+  onTagGoalsLiveChange,
   spectatorLink = '',
+  teamSpectatorLink = '',
   team1Score,
   team2Score,
   pointNumber,
@@ -128,6 +138,12 @@ export function SettingsModal({
   const [localHalfAt, setLocalHalfAt] = useState<GameClockTime>(halfAt);
   const [localEndAt, setLocalEndAt] = useState<GameClockTime>(endAt);
   const [localTheme, setLocalTheme] = useState<Theme>(theme);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [spectatorAudience, setSpectatorAudience] = useState<'opponents' | 'team'>('opponents');
+
+  useEffect(() => {
+    if (visible) setSpectatorAudience('opponents');
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -194,13 +210,17 @@ export function SettingsModal({
   };
 
   const handleChangeTeam = () => {
-    if (window.confirm('Are you sure you want to change your team? This will reset the current game.')) {
+    if (window.confirm('Change team? A game with points is kept on the homepage.')) {
       onReset();
       if (onChangeTeam) {
         onChangeTeam();
       }
       onClose();
     }
+  };
+
+  const handleEndGame = () => {
+    setConfirmEnd(true);
   };
 
   const reportText = buildScoreReport({
@@ -234,12 +254,15 @@ export function SettingsModal({
     });
   };
 
+  const showingTeam = spectatorAudience === 'team' && !!teamSpectatorLink;
+  const activeSpectatorLink = showingTeam ? teamSpectatorLink : spectatorLink;
+
   const handleShareSpectatorLink = () => {
-    if (!spectatorLink || typeof navigator.share !== 'function') return;
+    if (!activeSpectatorLink || typeof navigator.share !== 'function') return;
     void navigator.share({
       title: `${team1Name} vs ${team2Name}`,
-      text: `Watch live on ${APP_NAME}`,
-      url: spectatorLink,
+      text: showingTeam ? `Line and score on ${APP_NAME}` : `Live score on ${APP_NAME}`,
+      url: activeSpectatorLink,
     });
   };
 
@@ -440,9 +463,27 @@ export function SettingsModal({
                 </label>
               </div>
               <div style={styles.matchAdmin}>
+                {onTagGoalsLiveChange && (
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.compactAction,
+                      ...(tagGoalsLive ? styles.compactActionOn : {}),
+                    }}
+                    aria-pressed={tagGoalsLive}
+                    onClick={() => onTagGoalsLiveChange(!tagGoalsLive)}
+                  >
+                    {tagGoalsLive ? 'Tagging our goals' : 'Tag our goals as we go'}
+                  </button>
+                )}
                 {onChangeTeam && (
                   <button type="button" style={styles.compactAction} onClick={handleChangeTeam}>
                     Change team
+                  </button>
+                )}
+                {onEndGame && (
+                  <button type="button" style={styles.compactAction} onClick={handleEndGame}>
+                    End game
                   </button>
                 )}
                 <button type="button" style={styles.compactActionDanger} onClick={handleReset}>
@@ -475,15 +516,47 @@ export function SettingsModal({
               <h3 style={styles.cardTitle}>Spectators</h3>
             </div>
             <div style={styles.cardContent}>
+              {teamSpectatorLink && (
+                <div role="group" aria-label="Who is scanning" style={{ ...styles.themeSegmented, marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    aria-pressed={spectatorAudience === 'opponents'}
+                    style={{
+                      ...styles.themeSegment,
+                      ...(spectatorAudience === 'opponents' ? styles.themeSegmentActive : {}),
+                    }}
+                    onClick={() => setSpectatorAudience('opponents')}
+                  >
+                    Opponents
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={spectatorAudience === 'team'}
+                    style={{
+                      ...styles.themeSegment,
+                      ...(spectatorAudience === 'team' ? styles.themeSegmentActive : {}),
+                    }}
+                    onClick={() => setSpectatorAudience('team')}
+                  >
+                    Team
+                  </button>
+                </div>
+              )}
               <p style={styles.spectatorHint}>
-                Team members or opponents can scan for a live scoreboard. Anyone with the
-                link sees the score and team names; the roster stays on this device.
+                {showingTeam
+                  ? 'Same score, plus the current and next line. Only share this with teammates.'
+                  : 'Score, point, and gender split. Player names stay on this phone.'}
               </p>
-              {spectatorLink && <QrCode value={spectatorLink} label="Spectator QR code" />}
-              {typeof navigator.share === 'function' && spectatorLink && (
+              {activeSpectatorLink && (
+                <QrCode
+                  value={activeSpectatorLink}
+                  label={showingTeam ? 'Team QR code' : 'Opponents QR code'}
+                />
+              )}
+              {typeof navigator.share === 'function' && activeSpectatorLink && (
                 <div style={styles.compactActions}>
                   <button type="button" style={styles.compactAction} onClick={handleShareSpectatorLink}>
-                    Share link
+                    {showingTeam ? 'Share team link' : 'Share opponents link'}
                   </button>
                 </div>
               )}
@@ -514,6 +587,43 @@ export function SettingsModal({
             </div>
           </div>
         </div>
+
+        {confirmEnd && (
+          <div className="confirm-overlay" role="presentation" onClick={() => setConfirmEnd(false)}>
+            <div
+              className="confirm-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="end-game-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h3 id="end-game-title" className="confirm-title">
+                End game
+              </h3>
+              <p className="confirm-copy">
+                {hasPoints
+                  ? 'Save this game on the homepage and leave the scoreboard.'
+                  : 'Leave this game. No points were scored, so it will not be saved.'}
+              </p>
+              <div className="confirm-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setConfirmEnd(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setConfirmEnd(false);
+                    onEndGame?.();
+                    onClose();
+                  }}
+                >
+                  End game
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="settings-footer" style={styles.footer}>
@@ -852,6 +962,11 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     display: 'inline-block',
     boxSizing: 'border-box',
+  },
+  compactActionOn: {
+    backgroundColor: THEME.openTint,
+    borderColor: THEME.open,
+    color: COLORS.text,
   },
   spectatorHint: {
     margin: '0 0 12px',

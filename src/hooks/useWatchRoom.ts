@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { SpectatorLinkStatus, SpectatorSnapshot } from '../utils/spectatorState';
+import {
+  spectatorSnapshotForAudience,
+  type SpectatorLinkStatus,
+  type SpectatorSnapshot,
+} from '../utils/spectatorState';
 import { watchSnapshotsEqual, type WatchServerMessage } from '../utils/watchRoom';
 
 const RETRY_START_MS = 2000;
@@ -24,6 +28,7 @@ export function useWatchHost(
   enabled: boolean,
   roomId: string | null,
   writeKey: string | null,
+  viewKey: string | null,
   snapshot: SpectatorSnapshot
 ) {
   const wsRef = useRef<WebSocket | null>(null);
@@ -43,7 +48,12 @@ export function useWatchHost(
       wsRef.current = ws;
       ws.addEventListener('open', () => {
         delay = RETRY_START_MS;
-        send(ws, { type: 'host', room: roomId, key: writeKey });
+        send(ws, {
+          type: 'host',
+          room: roomId,
+          key: writeKey,
+          ...(viewKey ? { view: viewKey } : {}),
+        });
         send(ws, { type: 'put', room: roomId, key: writeKey, snap: snapRef.current });
         lastSentRef.current = snapRef.current;
       });
@@ -76,7 +86,7 @@ export function useWatchHost(
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [enabled, roomId, writeKey]);
+  }, [enabled, roomId, writeKey, viewKey]);
 
   useEffect(() => {
     if (!enabled || !roomId || !writeKey) return;
@@ -92,7 +102,7 @@ export function useWatchHost(
   }, [enabled, roomId, writeKey, snapshot]);
 }
 
-export function useWatchViewer(roomId: string | null): {
+export function useWatchViewer(roomId: string | null, viewKey?: string | null): {
   snapshot: SpectatorSnapshot | null;
   status: SpectatorLinkStatus;
 } {
@@ -113,13 +123,17 @@ export function useWatchViewer(roomId: string | null): {
       ws.addEventListener('open', () => {
         if (!ws) return;
         delay = RETRY_START_MS;
-        send(ws, { type: 'join', room: roomId });
+        send(ws, {
+          type: 'join',
+          room: roomId,
+          ...(viewKey ? { view: viewKey } : {}),
+        });
       });
       ws.addEventListener('message', (ev) => {
         try {
           const msg = JSON.parse(String(ev.data)) as WatchServerMessage;
           if (msg.type === 'state') {
-            setSnapshot(msg.snap);
+            setSnapshot(spectatorSnapshotForAudience(msg.snap, viewKey ? 'team' : 'public'));
             setStatus('live');
           } else if (msg.type === 'error' && msg.error === 'expired') {
             stopped = true;
@@ -146,7 +160,7 @@ export function useWatchViewer(roomId: string | null): {
       if (retry) clearTimeout(retry);
       ws?.close();
     };
-  }, [roomId]);
+  }, [roomId, viewKey]);
 
   return { snapshot, status };
 }

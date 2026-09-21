@@ -27,6 +27,16 @@ import { COLORS } from './src/constants';
 import { loadRosterForTeam, saveRosterForTeam } from './src/utils/rosterStorage';
 import { mergeImportedPlayers, type ParsedRosterRow } from './src/utils/rosterImport';
 import { loadGameSession, scheduleSaveGameSession, clearGameSession, clearGameSessionForTeam, type GameSession } from './src/utils/gameSession';
+import { applyGoalTag } from './src/utils/goalTags';
+import {
+  loadGameArchive,
+  rememberArchivedGame,
+  replaceArchivedGame,
+  archiveTitle,
+  type ArchivedGame,
+} from './src/utils/gameArchive';
+import { pullingTeamForPoint } from './src/utils/possession';
+import { ArchiveGameScreen } from './src/components/ArchiveGameScreen';
 import { buildSpectatorSnapshot } from './src/utils/spectatorState';
 import { isSoftCapReached, parseSoftCap, type SoftPointCap } from './src/utils/softCap';
 import { parseGameClockTime, type GameClockTime } from './src/utils/gameClock';
@@ -44,6 +54,17 @@ import { useWatchHost, useWatchViewer } from './src/hooks/useWatchRoom';
 
 const assignNumbers = assignNumbersByGender;
 
+function playersFromLineKey(key: string): { name: string; g: 'O' | 'W' }[] {
+  if (!key) return [];
+  return key.split('\n').map((row) => {
+    const cut = row.indexOf('\u0001');
+    return {
+      name: cut === -1 ? row : row.slice(cut + 1),
+      g: row.slice(0, cut) === 'W' ? 'W' : 'O',
+    };
+  });
+}
+
 interface ScoreEvent {
   team: 1 | 2;
   lineIndex: number;
@@ -54,6 +75,41 @@ interface ScoreEvent {
   pendingPlayerIds: string[];
   /** Who was on the field for the point that just ended. */
   linePlayerIds: string[];
+  scorerId?: string;
+  throwerId?: string;
+  pullOverride?: 1 | 2;
+}
+
+function readTagGoals(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem('ultimate-tag-goals') === '1';
+}
+
+function archivedGameFromSession(session: GameSession, id: string): ArchivedGame | null {
+  if (!session.gameStarted || session.scoreHistory.length === 0) return null;
+  return {
+    id,
+    startedAt: session.startedAt || new Date().toISOString(),
+    team1Name: session.team1Name,
+    team2Name: session.team2Name,
+    team1Score: session.team1Score,
+    team2Score: session.team2Score,
+    roster: session.roster.map((player) => ({
+      uuid: player.uuid,
+      name: player.name,
+      gender: player.gender,
+    })),
+    openingPull: session.openingPull ?? null,
+    halfPoint: session.halfPoint ?? null,
+    points: session.scoreHistory.map((event) => ({
+      team: event.team,
+      pointNumber: event.pointNumber,
+      linePlayerIds: event.linePlayerIds ?? [],
+      ...(event.scorerId ? { scorerId: event.scorerId } : {}),
+      ...(event.throwerId ? { throwerId: event.throwerId } : {}),
+      ...(event.pullOverride ? { pullOverride: event.pullOverride } : {}),
+    })),
+  };
 }
 
 function readLineupSize(): LineupSize {
@@ -129,6 +185,13 @@ export default function App() {
     return saved === 'light' ? 'light' : 'dark';
   });
   const [scoreHistory, setScoreHistory] = useState<ScoreEvent[]>([]);
+  const [openingPull, setOpeningPull] = useState<1 | 2 | null>(null);
+  const [halfPoint, setHalfPoint] = useState<number | null>(null);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [tagGoalsLive, setTagGoalsLive] = useState<boolean>(() => readTagGoals());
+  const [dismissedTagPoint, setDismissedTagPoint] = useState<number | null>(null);
+  const [archive, setArchive] = useState<ArchivedGame[]>(() => loadGameArchive());
+  const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
 
   // Track rotation index for men and women
   const [openIndex, setOpenIndex] = useState(0);
@@ -138,10 +201,12 @@ export default function App() {
   );
   const [watchRoomId, setWatchRoomId] = useState<string | null>(null);
   const [watchWriteKey, setWatchWriteKey] = useState<string | null>(null);
+  const [watchViewKey, setWatchViewKey] = useState<string | null>(null);
 
   const ensureWatchRoom = useCallback(() => {
     setWatchRoomId((id) => id ?? mintRoomId());
     setWatchWriteKey((key) => key ?? mintWriteKey());
+    setWatchViewKey((key) => key ?? mintWriteKey());
   }, []);
 
   useEffect(() => {
@@ -178,7 +243,16 @@ export default function App() {
     setPointNumber(session.pointNumber);
     setOpenIndex(session.openIndex);
     setWomenIndex(session.womenIndex);
-    setScoreHistory(session.scoreHistory);
+    setScoreHistory(
+      session.scoreHistory.map((event) => ({
+        ...event,
+        linePlayerIds: event.linePlayerIds ?? [],
+      }))
+    );
+    setOpeningPull(session.openingPull ?? null);
+    setHalfPoint(session.halfPoint ?? null);
+    setStartedAt(session.startedAt ?? null);
+    setDismissedTagPoint(null);
     setLineupSize(session.lineupSize);
     setStartingOpen(session.startingOpen);
     setSplitCycle(session.splitCycle);
@@ -195,6 +269,7 @@ export default function App() {
     if (session.watchRoomId && session.watchWriteKey) {
       setWatchRoomId(session.watchRoomId);
       setWatchWriteKey(session.watchWriteKey);
+      setWatchViewKey(session.watchViewKey ?? null);
     }
     setShowHomeScreen(false);
     setResumeLabel(null);
@@ -206,6 +281,10 @@ export default function App() {
     setLineIndex(0);
     setPointNumber(1);
     setScoreHistory([]);
+    setOpeningPull(null);
+    setHalfPoint(null);
+    setStartedAt(null);
+    setDismissedTagPoint(null);
     setOpenIndex(0);
     setWomenIndex(0);
     setPendingPlayers([]);
@@ -215,6 +294,7 @@ export default function App() {
     setEndAt(null);
     setWatchRoomId(null);
     setWatchWriteKey(null);
+    setWatchViewKey(null);
     clearGameSession();
   }, []);
 
@@ -228,8 +308,16 @@ export default function App() {
     setWomenIndex(0);
   }, []);
 
+  const archiveSessionIfPlayed = (session: GameSession | null) => {
+    if (!session) return;
+    const record = archivedGameFromSession(session, crypto.randomUUID());
+    if (!record) return;
+    setArchive(rememberArchivedGame(record));
+  };
+
   const handleStartGame = (teamName: string) => {
     const trimmed = teamName.trim();
+    archiveSessionIfPlayed(loadGameSession());
     resetScoreboardForNewSession();
     setTeam1Name(trimmed);
     setShowHomeScreen(false);
@@ -252,8 +340,10 @@ export default function App() {
     }
   };
 
-  const handleKickoff = () => {
+  const handleKickoff = (pulling: 1 | 2) => {
     ensureWatchRoom();
+    setOpeningPull(pulling);
+    setStartedAt((current) => current ?? new Date().toISOString());
     setGameStarted(true);
     setShowRoster(false);
   };
@@ -297,10 +387,51 @@ export default function App() {
     return { added: added.length, skipped };
   };
 
-  const handleChangeTeam = () => {
+  const archiveLiveGame = () => {
+    if (!gameStarted || scoreHistory.length === 0) return;
+    const record: ArchivedGame = {
+      id: crypto.randomUUID(),
+      startedAt: startedAt || new Date().toISOString(),
+      team1Name,
+      team2Name,
+      team1Score,
+      team2Score,
+      roster: roster.map((player) => ({
+        uuid: player.uuid,
+        name: player.name,
+        gender: player.gender,
+      })),
+      openingPull,
+      halfPoint,
+      points: scoreHistory.map((event) => ({
+        team: event.team,
+        pointNumber: event.pointNumber,
+        linePlayerIds: event.linePlayerIds,
+        ...(event.scorerId ? { scorerId: event.scorerId } : {}),
+        ...(event.throwerId ? { throwerId: event.throwerId } : {}),
+        ...(event.pullOverride ? { pullOverride: event.pullOverride } : {}),
+      })),
+    };
+    setArchive(rememberArchivedGame(record));
+  };
+
+  const leaveToHome = () => {
+    resetScoreboardForNewSession();
     setShowHomeScreen(true);
     setShowRoster(false);
     setSetupStep('roster');
+    setSettingsVisible(false);
+    setResumeLabel(null);
+  };
+
+  const handleChangeTeam = () => {
+    archiveLiveGame();
+    leaveToHome();
+  };
+
+  const handleEndGame = () => {
+    archiveLiveGame();
+    leaveToHome();
   };
 
   // Calculate total players used so far for proper rotation
@@ -351,6 +482,8 @@ export default function App() {
   );
   const currentLine = [...currentOpenQueue, ...currentWomanQueue];
   const nextLine = [...nextOpenQueue, ...nextWomanQueue];
+  const spectatorLineKey = currentLine.map((player) => `${player.gender}\u0001${player.name}`).join('\n');
+  const spectatorNextKey = nextLine.map((player) => `${player.gender}\u0001${player.name}`).join('\n');
   const liveSpectatorSnapshot = useMemo(
     () =>
       buildSpectatorSnapshot({
@@ -366,6 +499,8 @@ export default function App() {
         softCap,
         halfAt,
         endAt,
+        line: playersFromLineKey(spectatorLineKey),
+        next: playersFromLineKey(spectatorNextKey),
       }),
     [
       team1Name,
@@ -380,15 +515,21 @@ export default function App() {
       softCap,
       halfAt,
       endAt,
+      spectatorLineKey,
+      spectatorNextKey,
     ]
   );
 
   const viewingRoomId = watchHash?.kind === 'room' ? watchHash.roomId : null;
-  const { snapshot: roomSnapshot, status: roomStatus } = useWatchViewer(viewingRoomId);
+  const viewingViewKey =
+    watchHash?.kind === 'room' && watchHash.view === 'team' ? (watchHash.viewKey ?? null) : null;
+  const viewingAsTeam = viewingViewKey != null;
+  const { snapshot: roomSnapshot, status: roomStatus } = useWatchViewer(viewingRoomId, viewingViewKey);
   useWatchHost(
     !viewingRoomId && !!watchRoomId && !!watchWriteKey,
     watchRoomId,
     watchWriteKey,
+    watchViewKey,
     liveSpectatorSnapshot
   );
 
@@ -555,8 +696,42 @@ export default function App() {
     setLineIndex(0);
     setPointNumber(1);
     setScoreHistory([]);
+    setHalfPoint(null);
+    setDismissedTagPoint(null);
     setOpenIndex(0);
     setWomenIndex(0);
+  };
+
+  const handleTagGoal = (playerId: string) => {
+    setScoreHistory((prev) => {
+      const last = prev[prev.length - 1];
+      if (!last || last.team !== 1) return prev;
+      const nextTag = applyGoalTag(
+        { scorerId: last.scorerId, throwerId: last.throwerId },
+        playerId
+      );
+      const updated: ScoreEvent = { ...last };
+      if (nextTag.scorerId) updated.scorerId = nextTag.scorerId;
+      else delete updated.scorerId;
+      if (nextTag.throwerId) updated.throwerId = nextTag.throwerId;
+      else delete updated.throwerId;
+      return [...prev.slice(0, -1), updated];
+    });
+  };
+
+  const handleDismissTag = () => {
+    const last = scoreHistory[scoreHistory.length - 1];
+    if (!last) return;
+    setDismissedTagPoint(last.pointNumber);
+  };
+
+  const handleTagGoalsLiveChange = (enabled: boolean) => {
+    setTagGoalsLive(enabled);
+    try {
+      window.localStorage.setItem('ultimate-tag-goals', enabled ? '1' : '0');
+    } catch {
+      // ignore quota errors
+    }
   };
 
   const handleUndo = () => {
@@ -576,6 +751,7 @@ export default function App() {
     setPointNumber(lastEvent.pointNumber);
     setOpenIndex(lastEvent.openIndex);
     setWomenIndex(lastEvent.womenIndex);
+    setDismissedTagPoint((current) => (current === lastEvent.pointNumber ? null : current));
 
     const restored = restoreActivatedPendingAfterUndo({
       pendingIdsAtScore: lastEvent.pendingPlayerIds ?? [],
@@ -789,6 +965,9 @@ export default function App() {
       openIndex,
       womenIndex,
       scoreHistory,
+      openingPull,
+      halfPoint,
+      startedAt,
       lineupSize,
       startingOpen,
       splitCycle,
@@ -797,8 +976,9 @@ export default function App() {
       endAt,
       showRoster,
       setupStep,
-      watchRoomId: watchRoomId ?? undefined,
-      watchWriteKey: watchWriteKey ?? undefined,
+    watchRoomId: watchRoomId ?? undefined,
+    watchWriteKey: watchWriteKey ?? undefined,
+    watchViewKey: watchViewKey ?? undefined,
     });
   }, [
     sessionReady,
@@ -817,6 +997,9 @@ export default function App() {
     openIndex,
     womenIndex,
     scoreHistory,
+    openingPull,
+    halfPoint,
+    startedAt,
     lineupSize,
     startingOpen,
     splitCycle,
@@ -827,6 +1010,7 @@ export default function App() {
     setupStep,
     watchRoomId,
     watchWriteKey,
+    watchViewKey,
   ]);
 
   if (watchHash?.kind === 'snapshot') {
@@ -847,10 +1031,49 @@ export default function App() {
       <SpectatorScreen
         snapshot={roomSnapshot}
         linkStatus={roomStatus}
+        audience={viewingAsTeam ? 'team' : 'public'}
         onLeave={() => {
           window.location.hash = '';
           setWatchHash(null);
         }}
+      />
+    );
+  }
+
+  const lastPoint = scoreHistory[scoreHistory.length - 1];
+  const tagPlayers =
+    lastPoint?.team === 1
+      ? (lastPoint.linePlayerIds ?? [])
+          .map((id) => roster.find((player) => player.uuid === id))
+          .filter((player): player is Player => player != null)
+      : [];
+  const tagStrip =
+    tagGoalsLive &&
+    gameStarted &&
+    lastPoint?.team === 1 &&
+    dismissedTagPoint !== lastPoint.pointNumber &&
+    tagPlayers.length > 0
+      ? {
+          pointNumber: lastPoint.pointNumber,
+          scorerId: lastPoint.scorerId,
+          throwerId: lastPoint.throwerId,
+          players: tagPlayers,
+        }
+      : null;
+  const currentPull =
+    gameStarted && openingPull
+      ? pullingTeamForPoint(pointNumber, openingPull, scoreHistory)
+      : null;
+  const openArchive = openArchiveId
+    ? archive.find((game) => game.id === openArchiveId) ?? null
+    : null;
+
+  if (showHomeScreen && openArchive) {
+    return (
+      <ArchiveGameScreen
+        game={openArchive}
+        onBack={() => setOpenArchiveId(null)}
+        onChange={(next) => setArchive(replaceArchivedGame(next))}
       />
     );
   }
@@ -862,6 +1085,12 @@ export default function App() {
         onResume={resumeLabel ? handleResumeGame : undefined}
         resumeLabel={resumeLabel}
         onForgetTeam={handleForgetTeam}
+        archivedGames={archive.map((game) => ({
+          id: game.id,
+          title: archiveTitle(game, archive),
+          score: `${game.team1Score}–${game.team2Score}`,
+        }))}
+        onOpenArchive={setOpenArchiveId}
       />
     );
   }
@@ -947,6 +1176,10 @@ export default function App() {
           gameStarted={gameStarted}
           onKickoff={handleKickoff}
           onSubstitute={handleSubstitute}
+          pullLabel={currentPull === 1 ? 'We pull' : currentPull === 2 ? 'They pull' : null}
+          tagStrip={tagStrip}
+          onTagPlayer={handleTagGoal}
+          onDismissTag={handleDismissTag}
         />
       )}
       {settingsVisible && (
@@ -979,7 +1212,14 @@ export default function App() {
         onThemeChange={setTheme}
         onReset={handleReset}
         onChangeTeam={handleChangeTeam}
+        onEndGame={handleEndGame}
+        hasPoints={scoreHistory.length > 0}
+        tagGoalsLive={tagGoalsLive}
+        onTagGoalsLiveChange={handleTagGoalsLiveChange}
         spectatorLink={watchRoomId ? watchRoomUrlFromLocation(watchRoomId) : ''}
+        teamSpectatorLink={
+          watchRoomId && watchViewKey ? watchRoomUrlFromLocation(watchRoomId, watchViewKey) : ''
+        }
         team1Score={team1Score}
         team2Score={team2Score}
         pointNumber={pointNumber}

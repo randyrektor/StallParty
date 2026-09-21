@@ -15,9 +15,18 @@ interface HomeScreenProps {
   onResume?: () => void;
   resumeLabel?: string | null;
   onForgetTeam?: (teamName: string) => void;
+  archivedGames?: { id: string; title: string; score: string }[];
+  onOpenArchive?: (id: string) => void;
 }
 
-export function HomeScreen({ onStart, onResume, resumeLabel, onForgetTeam }: HomeScreenProps) {
+export function HomeScreen({
+  onStart,
+  onResume,
+  resumeLabel,
+  onForgetTeam,
+  archivedGames = [],
+  onOpenArchive,
+}: HomeScreenProps) {
   const [teamName, setTeamName] = useState('');
   const [savedTeams, setSavedTeams] = useState<string[]>([]);
 
@@ -102,6 +111,25 @@ export function HomeScreen({ onStart, onResume, resumeLabel, onForgetTeam }: Hom
                       ×
                     </button>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {archivedGames.length > 0 && (
+            <div style={styles.savedTeamsSection}>
+              <label style={styles.label}>Games</label>
+              <div style={styles.teamList}>
+                {archivedGames.map((game) => (
+                  <button
+                    key={game.id}
+                    type="button"
+                    className="recent-team archive-game"
+                    onClick={() => onOpenArchive?.(game.id)}
+                  >
+                    <span>{game.title}</span>
+                    <span className="archive-game-score">{game.score}</span>
+                  </button>
                 ))}
               </div>
             </div>

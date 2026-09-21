@@ -6,6 +6,7 @@ import {
   parseSpectatorHash,
   sanitizeSpectatorSnapshot,
   snapshotShowsGender,
+  spectatorSnapshotForAudience,
 } from './spectatorState';
 
 describe('buildSpectatorSnapshot', () => {
@@ -144,6 +145,31 @@ describe('spectator snapshot encoding', () => {
     const decoded = decodeSpectatorSnapshot(encodeSpectatorSnapshot(legacy as never));
     expect(decoded?.halfAt).toBeNull();
     expect(decoded?.endAt).toBeNull();
+  });
+
+  it('keeps a short line on the team snapshot and drops it for opponents', () => {
+    const snap = buildSpectatorSnapshot({
+      us: 'Disco',
+      them: 'Away',
+      s1: 1,
+      s2: 0,
+      point: 2,
+      lineIndex: 0,
+      lineupSize: 7,
+      startingOpen: 4,
+      splitCycle: 'same',
+      softCap: null,
+      now: 1,
+      line: [{ name: '  Haley  ', g: 'W' }, { name: '', g: 'O' }, { name: 'Jo', g: 'X' as 'O' }],
+      next: [{ name: 'Sam', g: 'O' }],
+    });
+    expect(snap.line).toEqual([{ name: 'Haley', g: 'W' }]);
+    expect(snap.next).toEqual([{ name: 'Sam', g: 'O' }]);
+    expect(decodeSpectatorSnapshot(encodeSpectatorSnapshot(snap))?.line).toEqual([{ name: 'Haley', g: 'W' }]);
+    const hidden = spectatorSnapshotForAudience(snap, 'public');
+    expect(hidden?.line).toBeUndefined();
+    expect(hidden?.next).toBeUndefined();
+    expect(hidden?.s1).toBe(1);
   });
 
   it('truncates team names and drops extra snapshot fields', () => {

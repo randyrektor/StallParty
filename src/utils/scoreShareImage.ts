@@ -292,28 +292,75 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export async function shareScoreOgImage(params: {
-  team1Name: string;
-  team2Name: string;
-  team1Score: number;
-  team2Score: number;
-}): Promise<void> {
-  const blob = await renderScoreOgBlob(params);
-  const filename = scoreOgFilename(
-    params.team1Name,
-    params.team2Name,
-    params.team1Score,
-    params.team2Score
-  );
-  const file = new File([blob], filename, { type: 'image/png' });
-  const title = scoreShareTitle(
-    params.team1Name,
-    params.team2Name,
-    params.team1Score,
-    params.team2Score
-  );
-  const data: ShareData = { files: [file], title, text: title };
+export function drawSummaryImage(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    team1Name: string;
+    team2Name: string;
+    team1Score: number;
+    team2Score: number;
+    lines: string[];
+  }
+): void {
+  const w = SCORE_OG_WIDTH;
+  const h = SCORE_OG_HEIGHT;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, w, h);
+  for (const blob of BLOBS) {
+    fillSoftEllipse(ctx, blob.x * w, blob.y * h, blob.rx, blob.ry, blob.rgb, blob.fade);
+  }
+  overlayGrain(ctx, w, h);
 
+  ctx.fillStyle = COLORS.muted;
+  ctx.font = `600 28px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(APP_NAME, 72, 78);
+
+  const cardY = 110;
+  const cardH = params.lines.length > 0 ? 210 : 360;
+  const cardGap = 36;
+  const cardX = 72;
+  const cardW = (w - cardX * 2 - cardGap) / 2;
+  const teams = [
+    { name: params.team1Name, score: params.team1Score, accent: COLORS.open, x: cardX },
+    { name: params.team2Name, score: params.team2Score, accent: COLORS.women, x: cardX + cardW + cardGap },
+  ];
+  for (const team of teams) {
+    ctx.fillStyle = COLORS.card;
+    fillRoundRect(ctx, team.x, cardY, cardW, cardH, 28);
+    ctx.strokeStyle = team.accent;
+    ctx.lineWidth = 3;
+    strokeRoundRect(ctx, team.x, cardY, cardW, cardH, 28);
+    const label = fitText(ctx, team.name, cardW - 48, 32, 18, 700);
+    ctx.fillStyle = team.accent;
+    ctx.font = `700 ${label.size}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(label.text, team.x + cardW / 2, cardY + 64);
+    ctx.fillStyle = COLORS.text;
+    ctx.font = `700 ${params.lines.length > 0 ? 96 : 148}px ${FONT}`;
+    ctx.fillText(String(team.score), team.x + cardW / 2, cardY + cardH - 36);
+  }
+
+  ctx.textAlign = 'center';
+  let lineY = cardY + cardH + 64;
+  params.lines.slice(0, 3).forEach((line, index) => {
+    const fitted = fitText(ctx, line, w - 144, 36, 22, 700);
+    ctx.fillStyle = index === 0 ? COLORS.muted : COLORS.text;
+    ctx.font = `700 ${fitted.size}px ${FONT}`;
+    ctx.fillText(fitted.text, w / 2, lineY);
+    lineY += fitted.size + 22;
+  });
+
+  ctx.fillStyle = COLORS.open;
+  ctx.font = `600 24px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(APP_URL.replace(/^https:\/\//, ''), 74, h - 42);
+}
+
+async function sharePng(blob: Blob, filename: string, title: string): Promise<void> {
+  const file = new File([blob], filename, { type: 'image/png' });
+  const data: ShareData = { files: [file], title, text: title };
   try {
     if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
       await navigator.share(data);
@@ -326,6 +373,57 @@ export async function shareScoreOgImage(params: {
   } catch (err) {
     if (isShareAbort(err)) return;
   }
-
   downloadBlob(blob, filename);
+}
+
+export async function shareSummaryImage(params: {
+  team1Name: string;
+  team2Name: string;
+  team1Score: number;
+  team2Score: number;
+  lines: string[];
+}): Promise<void> {
+  const canvas = document.createElement('canvas');
+  canvas.width = SCORE_OG_WIDTH;
+  canvas.height = SCORE_OG_HEIGHT;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas unavailable');
+  drawSummaryImage(ctx, params);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((next) => {
+      if (!next) reject(new Error('Failed to encode score image'));
+      else resolve(next);
+    }, 'image/png');
+  });
+  const title = scoreShareTitle(
+    params.team1Name,
+    params.team2Name,
+    params.team1Score,
+    params.team2Score
+  );
+  await sharePng(
+    blob,
+    scoreOgFilename(params.team1Name, params.team2Name, params.team1Score, params.team2Score),
+    params.lines.length > 0 ? `${title}. ${params.lines.join('. ')}` : title
+  );
+}
+
+export async function shareScoreOgImage(params: {
+  team1Name: string;
+  team2Name: string;
+  team1Score: number;
+  team2Score: number;
+}): Promise<void> {
+  const blob = await renderScoreOgBlob(params);
+  const title = scoreShareTitle(
+    params.team1Name,
+    params.team2Name,
+    params.team1Score,
+    params.team2Score
+  );
+  await sharePng(
+    blob,
+    scoreOgFilename(params.team1Name, params.team2Name, params.team1Score, params.team2Score),
+    title
+  );
 }
