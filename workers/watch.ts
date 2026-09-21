@@ -47,11 +47,34 @@ function withSecurityHeaders(response: Response): Response {
   });
 }
 
-const CRAWL_TYPES: Record<string, string> = {
-  '/robots.txt': 'text/plain; charset=utf-8',
-  '/sitemap.xml': 'application/xml; charset=utf-8',
-  '/sitemap.txt': 'text/plain; charset=utf-8',
-};
+const ROBOTS_TXT = `User-agent: *
+Allow: /
+
+Sitemap: https://stall.party/sitemap.xml
+`;
+
+const SITEMAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://stall.party/</loc>
+    <lastmod>2026-09-21</lastmod>
+  </url>
+</urlset>
+`;
+
+const SITEMAP_TXT = 'https://stall.party/\n';
+
+function crawlFile(body: string, contentType: string): Response {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=300',
+      'CDN-Cache-Control': 'no-cache',
+    },
+  });
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -65,17 +88,9 @@ export default {
     if (url.pathname === '/sitemap.xml/' || url.pathname === '/sitemap.txt/') {
       return Response.redirect(`${url.origin}${url.pathname.slice(0, -1)}`, 301);
     }
-    const crawlType = CRAWL_TYPES[url.pathname];
-    if (crawlType && env.ASSETS) {
-      const asset = await env.ASSETS.fetch(new Request(new URL(url.pathname, url.origin), request));
-      if (asset.ok) {
-        const headers = new Headers(asset.headers);
-        headers.set('Content-Type', crawlType);
-        headers.set('X-Content-Type-Options', 'nosniff');
-        headers.set('Cache-Control', 'public, max-age=300');
-        return new Response(asset.body, { status: 200, headers });
-      }
-    }
+    if (url.pathname === '/robots.txt') return crawlFile(ROBOTS_TXT, 'text/plain; charset=utf-8');
+    if (url.pathname === '/sitemap.xml') return crawlFile(SITEMAP_XML, 'text/xml; charset=utf-8');
+    if (url.pathname === '/sitemap.txt') return crawlFile(SITEMAP_TXT, 'text/plain; charset=utf-8');
     if (env.ASSETS) return withSecurityHeaders(await env.ASSETS.fetch(request));
     return new Response('Not found', { status: 404 });
   },
