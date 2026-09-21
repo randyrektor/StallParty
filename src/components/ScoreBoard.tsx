@@ -68,6 +68,8 @@ interface ScoreBoardProps {
   scoreHistory: any[];
   gameStarted?: boolean;
   onKickoff?: (pulling: 1 | 2) => void;
+  onHalfPull?: (pulling: 1 | 2) => void;
+  halfActive?: boolean;
   onBackToSetup?: () => void;
   onSubstitute?: (outPlayer: Player, inPlayer: Player) => void;
   pullLabel?: string | null;
@@ -109,6 +111,8 @@ export function ScoreBoard({
   scoreHistory,
   gameStarted = true,
   onKickoff,
+  onHalfPull,
+  halfActive = false,
   onBackToSetup,
   onSubstitute,
   pullLabel = null,
@@ -117,6 +121,7 @@ export function ScoreBoard({
   onDismissTag,
 }: ScoreBoardProps) {
   const [subOut, setSubOut] = useState<Player | null>(null);
+  const [halfOpen, setHalfOpen] = useState(false);
   const [dismissedReminder, setDismissedReminder] = useState('');
   const now = useNowTick();
   const team1TileRef = useRef<HTMLButtonElement>(null);
@@ -210,6 +215,14 @@ export function ScoreBoard({
                 'Roster'
               )}
             </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              aria-pressed={halfActive}
+              onClick={() => setHalfOpen(true)}
+            >
+              Halftime
+            </button>
           </>
         ) : (
           <button type="button" className="btn btn-ghost" onClick={onBackToSetup}>
@@ -288,6 +301,54 @@ export function ScoreBoard({
                 {team2Name}
               </button>
               <button type="button" className="btn btn-ghost confirm-actions-back" onClick={onBackToSetup}>
+                Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {halfOpen && (
+        <div
+          className="confirm-overlay confirm-overlay--soft"
+          onClick={() => setHalfOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="confirm-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="half-pull-title"
+          >
+            <h3 id="half-pull-title" className="confirm-title">
+              Who is pulling at half?
+            </h3>
+            <p className="confirm-copy">
+              After this pull, if you score, you pull next. If they score, they pull next.
+            </p>
+            <div className="confirm-actions confirm-actions--pull">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  onHalfPull?.(1);
+                  setHalfOpen(false);
+                }}
+              >
+                {team1Name}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  onHalfPull?.(2);
+                  setHalfOpen(false);
+                }}
+              >
+                {team2Name}
+              </button>
+              <button type="button" className="btn btn-ghost confirm-actions-back" onClick={() => setHalfOpen(false)}>
                 Back
               </button>
             </div>

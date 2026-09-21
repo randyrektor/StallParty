@@ -1014,6 +1014,12 @@ input:focus {
   cursor: pointer;
 }
 
+.app-shell-header .btn-ghost[aria-pressed='true'] {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  color: var(--text);
+}
+
 .btn-ghost {
   background: var(--bg-subtle);
   color: var(--text);

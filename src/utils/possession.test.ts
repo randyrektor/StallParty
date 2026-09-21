@@ -33,6 +33,13 @@ describe('pullingTeamForPoint', () => {
     expect(pullingTeamForPoint(4, 1, run)).toBe(1);
   });
 
+  it('uses the halftime pull for that point only', () => {
+    expect(pullingTeamForPoint(3, 1, game)).toBe(1);
+    expect(pullingTeamForPoint(3, 1, game, { pointNumber: 3, pull: 2 })).toBe(2);
+    const afterHalf: PullPoint[] = [...game, { pointNumber: 3, team: 2, pullOverride: 2 }];
+    expect(pullingTeamForPoint(4, 1, afterHalf, { pointNumber: 3, pull: 2 })).toBe(2);
+  });
+
   it('keeps an override on that point only', () => {
     const withOverride: PullPoint[] = [
       { pointNumber: 1, team: 2, pullOverride: 2 },

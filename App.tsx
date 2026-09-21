@@ -187,6 +187,7 @@ export default function App() {
   const [scoreHistory, setScoreHistory] = useState<ScoreEvent[]>([]);
   const [openingPull, setOpeningPull] = useState<1 | 2 | null>(null);
   const [halfPoint, setHalfPoint] = useState<number | null>(null);
+  const [halfPull, setHalfPull] = useState<1 | 2 | null>(null);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [tagGoalsLive, setTagGoalsLive] = useState<boolean>(() => readTagGoals());
   const [dismissedTagPoint, setDismissedTagPoint] = useState<number | null>(null);
@@ -251,6 +252,7 @@ export default function App() {
     );
     setOpeningPull(session.openingPull ?? null);
     setHalfPoint(session.halfPoint ?? null);
+    setHalfPull(session.halfPull === 1 || session.halfPull === 2 ? session.halfPull : null);
     setStartedAt(session.startedAt ?? null);
     setDismissedTagPoint(null);
     setLineupSize(session.lineupSize);
@@ -283,6 +285,7 @@ export default function App() {
     setScoreHistory([]);
     setOpeningPull(null);
     setHalfPoint(null);
+    setHalfPull(null);
     setStartedAt(null);
     setDismissedTagPoint(null);
     setOpenIndex(0);
@@ -551,6 +554,8 @@ export default function App() {
     pendingPlayers,
     masterOpenQueue,
     masterWomenQueue,
+    halfPoint,
+    halfPull,
   });
   scoringRef.current = {
     gameStarted,
@@ -564,6 +569,8 @@ export default function App() {
     pendingPlayers,
     masterOpenQueue,
     masterWomenQueue,
+    halfPoint,
+    halfPull,
   };
 
   const recordPoint = (team: 1 | 2) => {
@@ -611,6 +618,7 @@ export default function App() {
         womenIndex: s.womenIndex,
         pendingPlayerIds: s.pendingPlayers.map((p) => p.uuid),
         linePlayerIds,
+        ...(s.halfPoint === s.pointNumber && s.halfPull ? { pullOverride: s.halfPull } : {}),
       },
     ]);
     if (team === 1) setTeam1Score(next.team1Score);
@@ -690,6 +698,21 @@ export default function App() {
     ]
   );
 
+  const handleHalfPull = (pulling: 1 | 2) => {
+    setScoreHistory((prev) =>
+      prev.map((event) => {
+        if (halfPoint != null && event.pointNumber === halfPoint && event.pullOverride === halfPull) {
+          const next = { ...event };
+          delete next.pullOverride;
+          return next;
+        }
+        return event;
+      })
+    );
+    setHalfPoint(pointNumber);
+    setHalfPull(pulling);
+  };
+
   const handleReset = () => {
     setTeam1Score(0);
     setTeam2Score(0);
@@ -697,6 +720,7 @@ export default function App() {
     setPointNumber(1);
     setScoreHistory([]);
     setHalfPoint(null);
+    setHalfPull(null);
     setDismissedTagPoint(null);
     setOpenIndex(0);
     setWomenIndex(0);
@@ -967,6 +991,7 @@ export default function App() {
       scoreHistory,
       openingPull,
       halfPoint,
+      halfPull,
       startedAt,
       lineupSize,
       startingOpen,
@@ -999,6 +1024,7 @@ export default function App() {
     scoreHistory,
     openingPull,
     halfPoint,
+    halfPull,
     startedAt,
     lineupSize,
     startingOpen,
@@ -1060,10 +1086,13 @@ export default function App() {
           players: tagPlayers,
         }
       : null;
+  const half = halfPoint != null && halfPull ? { pointNumber: halfPoint, pull: halfPull } : null;
   const currentPull =
     gameStarted && openingPull
-      ? pullingTeamForPoint(pointNumber, openingPull, scoreHistory)
+      ? pullingTeamForPoint(pointNumber, openingPull, scoreHistory, half)
       : null;
+  const pullLabel =
+    currentPull === 1 ? 'We pull' : currentPull === 2 ? 'They pull' : null;
   const openArchive = openArchiveId
     ? archive.find((game) => game.id === openArchiveId) ?? null
     : null;
@@ -1175,8 +1204,12 @@ export default function App() {
           scoreHistory={scoreHistory}
           gameStarted={gameStarted}
           onKickoff={handleKickoff}
+          onHalfPull={handleHalfPull}
+          halfActive={halfPoint === pointNumber && halfPull != null}
           onSubstitute={handleSubstitute}
-          pullLabel={currentPull === 1 ? 'We pull' : currentPull === 2 ? 'They pull' : null}
+          pullLabel={
+            pullLabel && halfPoint === pointNumber && halfPull ? `Half · ${pullLabel}` : pullLabel
+          }
           tagStrip={tagStrip}
           onTagPlayer={handleTagGoal}
           onDismissTag={handleDismissTag}

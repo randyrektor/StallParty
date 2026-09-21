@@ -10,14 +10,21 @@ export function otherSide(side: Side): Side {
   return side === 1 ? 2 : 1;
 }
 
-/** Who pulls `pointNumber`. Point 1 is the opening pull. After that, the team that just scored pulls. */
+export type HalfPull = {
+  pointNumber: number;
+  pull: Side;
+};
+
+/** Who pulls `pointNumber`. Point 1 is the opening pull. After that, the team that just scored pulls, unless this point is the chosen halftime pull. */
 export function pullingTeamForPoint(
   pointNumber: number,
   openingPull: Side,
-  points: readonly PullPoint[]
+  points: readonly PullPoint[],
+  half?: HalfPull | null
 ): Side {
   const point = points.find((entry) => entry.pointNumber === pointNumber);
   if (point?.pullOverride === 1 || point?.pullOverride === 2) return point.pullOverride;
+  if (half && half.pointNumber === pointNumber) return half.pull;
   if (pointNumber <= 1) return openingPull;
   const previous = points.reduce<PullPoint | null>((latest, entry) => {
     if (entry.pointNumber >= pointNumber) return latest;

@@ -37,6 +37,8 @@ export type GameSession = {
   openingPull?: 1 | 2 | null;
   /** Point number where the second half began. */
   halfPoint?: number | null;
+  /** Who pulls the halftime point. Missing until a captain chooses. */
+  halfPull?: 1 | 2 | null;
   startedAt?: string | null;
   lineupSize: LineupSize;
   startingOpen: number;
