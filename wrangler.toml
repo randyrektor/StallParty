@@ -13,13 +13,9 @@ custom_domain = true
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = [
-  "/robots.txt",
-  "/sitemap.xml",
-  "/sitemap.xml/",
-  "/sitemap.txt",
-  "/sitemap.txt/",
-]
+# Crawl files and /watch-ws must hit the Worker. If assets run first, /watch-ws
+# becomes the SPA HTML and spectators sit on "Reconnecting".
+run_worker_first = true
 
 [[durable_objects.bindings]]
 name = "ROOMS"
