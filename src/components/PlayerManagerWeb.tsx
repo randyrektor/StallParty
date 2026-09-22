@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { flushSync } from 'react-dom';
-import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragOverlay, MeasuringStrategy, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, type DragMoveEvent, type DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Player, type LineupSize, type SplitCycle, type PlayerPosition, PLAYER_POSITIONS, PLAYER_POSITION_LABELS, parseJersey } from '../types';
@@ -39,6 +39,7 @@ class RosterTouchSensor extends TouchSensor {
 
   abort() {
     if (armedRosterTouch === this) armedRosterTouch = null;
+    unlockRosterScroll();
     callParentSensor(this, 'handleCancel');
   }
 }
@@ -53,10 +54,16 @@ function callParentSensor(sensor: RosterTouchSensor, method: SensorMethod, event
 Object.assign(RosterTouchSensor.prototype, {
   handleStart(this: RosterTouchSensor) {
     this.armed = true;
+    lockRosterScroll();
   },
   handleMove(this: RosterTouchSensor, event: Event) {
+    if (!this.armed) {
+      callParentSensor(this, 'handleMove', event);
+      return;
+    }
+    if (event.cancelable) event.preventDefault();
     const activated = (this as unknown as { activated?: boolean }).activated;
-    if (activated || !this.armed) {
+    if (activated) {
       callParentSensor(this, 'handleMove', event);
       return;
     }
@@ -68,10 +75,12 @@ Object.assign(RosterTouchSensor.prototype, {
   },
   handleEnd(this: RosterTouchSensor) {
     if (armedRosterTouch === this) armedRosterTouch = null;
+    unlockRosterScroll();
     callParentSensor(this, 'handleEnd');
   },
   handleCancel(this: RosterTouchSensor) {
     if (armedRosterTouch === this) armedRosterTouch = null;
+    unlockRosterScroll();
     callParentSensor(this, 'handleCancel');
   },
 });
@@ -85,6 +94,137 @@ function pointFromTouchEvent(event: Event): { x: number; y: number } | null {
 
 function cancelRosterTouchDrag() {
   armedRosterTouch?.abort();
+}
+
+/** How close the card must get to the screen edge before the list scrolls. */
+const ROSTER_EDGE_PX = 72;
+
+type RosterScrollLock = {
+  el: HTMLElement;
+  top: number;
+  expected: number;
+  speed: number;
+  programmatic: boolean;
+  frame: number;
+  frozen: boolean;
+  previousOverflow: string;
+};
+
+let rosterScrollLock: RosterScrollLock | null = null;
+
+function onRosterScroll() {
+  const lock = rosterScrollLock;
+  if (!lock || lock.programmatic) return;
+  if (Math.abs(lock.el.scrollTop - lock.expected) < 1) {
+    lock.top = lock.el.scrollTop;
+    return;
+  }
+  if (lock.el.scrollTop === lock.top) return;
+  const top = lock.top;
+  requestAnimationFrame(() => {
+    const current = rosterScrollLock;
+    if (!current || current.programmatic || current.top !== top) return;
+    if (Math.abs(current.el.scrollTop - current.expected) < 1) return;
+    current.programmatic = true;
+    current.el.scrollTop = top;
+    current.programmatic = false;
+    current.top = current.el.scrollTop;
+  });
+}
+
+function tickRosterEdgeScroll() {
+  const lock = rosterScrollLock;
+  if (!lock) return;
+  if (lock.speed) {
+    lock.expected = lock.el.scrollTop + lock.speed;
+    lock.programmatic = true;
+    lock.el.scrollTop = lock.expected;
+    lock.programmatic = false;
+    lock.top = lock.el.scrollTop;
+  }
+  lock.frame = requestAnimationFrame(tickRosterEdgeScroll);
+}
+
+function lockRosterScroll() {
+  if (rosterScrollLock) return;
+  const el = document.querySelector('.app-shell-body');
+  if (!(el instanceof HTMLElement)) return;
+  const lock: RosterScrollLock = {
+    el,
+    top: el.scrollTop,
+    expected: el.scrollTop,
+    speed: 0,
+    programmatic: false,
+    frame: 0,
+    frozen: false,
+    previousOverflow: '',
+  };
+  rosterScrollLock = lock;
+  el.classList.add('roster-drag-lock');
+  el.addEventListener('scroll', onRosterScroll);
+  lock.frame = requestAnimationFrame(tickRosterEdgeScroll);
+}
+
+function freezeRosterOverflow() {
+  const lock = rosterScrollLock;
+  if (!lock || lock.frozen) return;
+  lock.frozen = true;
+  lock.previousOverflow = lock.el.style.overflow;
+  lock.el.style.overflow = 'hidden';
+}
+
+function unlockRosterScroll() {
+  const lock = rosterScrollLock;
+  if (!lock) return;
+  cancelAnimationFrame(lock.frame);
+  lock.el.removeEventListener('scroll', onRosterScroll);
+  if (lock.frozen) lock.el.style.overflow = lock.previousOverflow;
+  lock.el.classList.remove('roster-drag-lock');
+  rosterScrollLock = null;
+}
+
+const rosterMeasuring = {
+  droppable: {
+    strategy: MeasuringStrategy.WhileDragging,
+    frequency: 80,
+  },
+};
+
+function RosterDragOverlay({ player }: { player: Player | null }) {
+  return (
+    <DragOverlay dropAnimation={null} zIndex={30}>
+      {player ? (
+        <PlayerSeat
+          gender={player.gender}
+          name={player.name}
+          position={player.position}
+          jersey={player.jersey}
+          style={{ cursor: 'grabbing' }}
+        />
+      ) : null}
+    </DragOverlay>
+  );
+}
+
+function setRosterEdgeSpeed(rect: { top: number; bottom: number } | null) {
+  const lock = rosterScrollLock;
+  if (!lock) return;
+  if (!rect) {
+    lock.speed = 0;
+    return;
+  }
+  const bounds = lock.el.getBoundingClientRect();
+  const topZone = bounds.top + ROSTER_EDGE_PX;
+  const bottomZone = bounds.bottom - ROSTER_EDGE_PX;
+  if (rect.top < topZone) {
+    const depth = Math.min(1, (topZone - rect.top) / ROSTER_EDGE_PX);
+    lock.speed = -Math.round(2 + depth * 12);
+  } else if (rect.bottom > bottomZone) {
+    const depth = Math.min(1, (rect.bottom - bottomZone) / ROSTER_EDGE_PX);
+    lock.speed = Math.round(2 + depth * 12);
+  } else {
+    lock.speed = 0;
+  }
 }
 
 const COLORS = {
@@ -307,7 +447,7 @@ function SortablePlayer({
       cancelRosterTouchDrag();
       window.getSelection()?.removeAllRanges();
       onLongPress();
-    }, 500);
+    }, 800);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -446,7 +586,7 @@ function SortablePlayer({
           />
         }
         style={{
-          opacity: isDragging ? 0.8 : 1,
+          opacity: isDragging ? 0.35 : 1,
           transform: CSS.Transform.toString(transform),
           transition,
           touchAction: 'pan-y',
@@ -851,7 +991,7 @@ export function PlayerManagerWeb({
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     // Pause, then drag, to reorder the row. A flick during the pause scrolls.
-    useSensor(RosterTouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+    useSensor(RosterTouchSensor, { activationConstraint: { delay: 150, tolerance: 12 } })
   );
 
   // List order = master rotation queue first (source of truth after subs), then roster-only extras (e.g. pending).
@@ -871,7 +1011,19 @@ export function PlayerManagerWeb({
   const pendingOpenPlayers = useMemo(() => pendingPlayers.filter(p => p.gender === 'O'), [pendingPlayers]);
   const pendingWomenPlayers = useMemo(() => pendingPlayers.filter(p => p.gender === 'W'), [pendingPlayers]);
 
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const draggingPlayer = useMemo(
+    () => roster.find((player) => player.uuid === draggingId) ?? null,
+    [roster, draggingId]
+  );
+
+  function finishRosterDrag() {
+    setDraggingId(null);
+    unlockRosterScroll();
+  }
+
   function handlePlayerDragEnd(event: any, gender: 'O' | 'W') {
+    finishRosterDrag();
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -886,14 +1038,16 @@ export function PlayerManagerWeb({
     onRosterChange(assignNumbers(newRoster));
   }
 
-  // Handle drag start to cancel any pending long-press
-  function handlePlayerDragStart(event: any) {
-    // Cancel any pending long-press when drag actually starts
-    // This is a safety measure in case the movement detection didn't catch it
-    if (event.active) {
-      // The long-press timeout will be cleared by the movement detection
-      // but this provides an additional safety net
-    }
+  function handlePlayerDragStart(event: DragStartEvent) {
+    setDraggingId(String(event.active.id));
+    lockRosterScroll();
+    // Hide overflow after dnd-kit has seen the scroller, so a finger drag
+    // cannot move the page. Edge scrolling still sets scrollTop directly.
+    requestAnimationFrame(() => freezeRosterOverflow());
+  }
+
+  function handlePlayerDragMove(event: DragMoveEvent) {
+    setRosterEdgeSpeed(event.active.rect.current.translated);
   }
 
   function handleDeletePlayer(playerToDelete: Player) {
@@ -1065,7 +1219,7 @@ export function PlayerManagerWeb({
           )}
 
           <div className="roster-board">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handlePlayerDragStart} onDragEnd={(e) => handlePlayerDragEnd(e, 'O')}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} autoScroll={false} measuring={rosterMeasuring} onDragStart={handlePlayerDragStart} onDragMove={handlePlayerDragMove} onDragCancel={finishRosterDrag} onDragEnd={(e) => handlePlayerDragEnd(e, 'O')}>
               <GenderRosterColumn
                 gender="O"
                 title="Open"
@@ -1087,8 +1241,9 @@ export function PlayerManagerWeb({
                 onAddPositionChange={setOpenPosition}
                 onAddSubmit={(position) => handleAddPlayer('O', position)}
               />
+              <RosterDragOverlay player={draggingPlayer?.gender === 'O' ? draggingPlayer : null} />
             </DndContext>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handlePlayerDragStart} onDragEnd={(e) => handlePlayerDragEnd(e, 'W')}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} autoScroll={false} measuring={rosterMeasuring} onDragStart={handlePlayerDragStart} onDragMove={handlePlayerDragMove} onDragCancel={finishRosterDrag} onDragEnd={(e) => handlePlayerDragEnd(e, 'W')}>
               <GenderRosterColumn
                 gender="W"
                 title="Women"
@@ -1110,6 +1265,7 @@ export function PlayerManagerWeb({
                 onAddPositionChange={setWomenPosition}
                 onAddSubmit={(position) => handleAddPlayer('W', position)}
               />
+              <RosterDragOverlay player={draggingPlayer?.gender === 'W' ? draggingPlayer : null} />
             </DndContext>
           </div>
 

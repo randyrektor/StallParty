@@ -405,6 +405,12 @@ input:focus {
   -webkit-overflow-scrolling: touch;
 }
 
+.app-shell-body.roster-drag-lock {
+  overscroll-behavior: none;
+  touch-action: none;
+  overflow-anchor: none;
+}
+
 .app-shell--no-header .app-shell-body {
   padding-top: max(16px, env(safe-area-inset-top, 0px));
 }
