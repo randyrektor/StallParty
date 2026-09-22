@@ -15,7 +15,7 @@ interface HomeScreenProps {
   onResume?: () => void;
   resumeLabel?: string | null;
   onForgetTeam?: (teamName: string) => void;
-  archivedGames?: { id: string; title: string; score: string }[];
+  archivedGames?: { id: string; title: string; teams: string; score: string; ended?: boolean }[];
   onContinueGame?: (id: string) => void;
   onForgetGame?: (id: string) => void;
 }
@@ -166,6 +166,8 @@ export function HomeScreen({
     }
   };
 
+  const hasOpenGame = archivedGames.some((game) => !game.ended) || Boolean(onResume && resumeLabel);
+
   return (
     <AppShell showHeader={false} width="narrow" center>
       <div className="shell-card home-card">
@@ -232,7 +234,7 @@ export function HomeScreen({
                       }
                     }}
                   >
-                    <span>{game.title}</span>
+                    <span>{game.ended ? game.title : `Continue ${game.teams}`}</span>
                     <span className="archive-game-score">{game.score}</span>
                   </HoldButton>
                 ))}
@@ -245,21 +247,25 @@ export function HomeScreen({
             {onResume && resumeLabel && (
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ ...styles.startButton, backgroundColor: 'transparent', color: THEME.text, border: `1.5px solid ${THEME.borderSoft}`, boxShadow: 'none' }}
+                className="btn btn-primary"
+                style={styles.startButton}
                 onClick={onResume}
               >
-                Resume {resumeLabel}
+                Continue {resumeLabel}
               </button>
             )}
 
             <button
               type="button"
-              className="btn btn-primary"
-              style={styles.startButton}
+              className={hasOpenGame ? 'btn btn-ghost' : 'btn btn-primary'}
+              style={
+                hasOpenGame
+                  ? { ...styles.startButton, backgroundColor: 'transparent', color: THEME.text, border: `1.5px solid ${THEME.borderSoft}`, boxShadow: 'none' }
+                  : styles.startButton
+              }
               onClick={handleStart}
             >
-              Continue
+              {hasOpenGame ? 'New game' : 'Continue'}
             </button>
           </div>
       </div>

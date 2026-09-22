@@ -83,6 +83,13 @@ describe('rememberArchivedGame', () => {
     expect(loadGameArchive()).toEqual([]);
   });
 
+  it('keeps an ended game ended when it is loaded again', () => {
+    rememberArchivedGame({ ...game('final', '2026-07-12T18:00:00'), ended: true });
+    expect(loadGameArchive()[0]?.ended).toBe(true);
+    rememberArchivedGame(game('live', '2026-07-13T18:00:00'));
+    expect(loadGameArchive().find((item) => item.id === 'live')?.ended).toBe(false);
+  });
+
   it('forgets one saved game', () => {
     rememberArchivedGame(game('keep', '2026-07-12T18:00:00'));
     rememberArchivedGame(game('drop', '2026-07-13T18:00:00'));

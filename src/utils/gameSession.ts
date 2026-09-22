@@ -119,6 +119,12 @@ export function scheduleSaveGameSession(session: GameSession, delayMs = 250): vo
   }, delayMs);
 }
 
+/** Write immediately, replacing any save still waiting on the timer. */
+export function flushGameSession(session?: GameSession): void {
+  if (session) pendingSession = session;
+  flushPendingGameSession();
+}
+
 export function clearGameSession(): void {
   pendingSession = null;
   if (saveTimer != null) {

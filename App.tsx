@@ -27,7 +27,7 @@ import {
 import { COLORS } from './src/constants';
 import { loadRosterForTeam, saveRosterForTeam } from './src/utils/rosterStorage';
 import { mergeImportedPlayers, type ParsedRosterRow } from './src/utils/rosterImport';
-import { loadGameSession, saveGameSession, scheduleSaveGameSession, clearGameSession, clearGameSessionForTeam, type GameSession } from './src/utils/gameSession';
+import { loadGameSession, saveGameSession, scheduleSaveGameSession, flushGameSession, clearGameSession, clearGameSessionForTeam, type GameSession } from './src/utils/gameSession';
 import { applyGoalTag } from './src/utils/goalTags';
 import {
   loadGameArchive,
@@ -88,7 +88,7 @@ function readTagGoals(): boolean {
   return window.localStorage.getItem('ultimate-tag-goals') === '1';
 }
 
-function archivedGameFromSession(session: GameSession, id: string): ArchivedGame | null {
+function archivedGameFromSession(session: GameSession, id: string, ended = false): ArchivedGame | null {
   if (!session.gameStarted || session.scoreHistory.length === 0) return null;
   return {
     id,
@@ -113,6 +113,7 @@ function archivedGameFromSession(session: GameSession, id: string): ArchivedGame
       ...(event.pullOverride ? { pullOverride: event.pullOverride } : {}),
     })),
     session: { ...session, archiveId: id },
+    ended,
   };
 }
 
@@ -323,12 +324,17 @@ export default function App() {
       session.team1Name === game.team1Name &&
       session.team2Name === game.team2Name);
 
-  const persistArchivedSession = (session: GameSession) => {
+  const persistArchivedSession = (session: GameSession, ended = false) => {
     const match = archive.find((game) => sameSavedGame(session, game));
     const id = match?.id ?? session.archiveId ?? crypto.randomUUID();
-    const record = archivedGameFromSession({ ...session, archiveId: id }, id);
-    if (!record) return;
+    const record = archivedGameFromSession(
+      { ...session, archiveId: id },
+      id,
+      ended || match?.ended === true
+    );
+    if (!record) return null;
     setArchive(match ? replaceArchivedGame(record) : rememberArchivedGame(record));
+    return id;
   };
 
   const archiveSessionIfPlayed = (session: GameSession | null) => {
@@ -408,46 +414,70 @@ export default function App() {
     return { added: added.length, skipped };
   };
 
-  const archiveLiveGame = () => {
-    if (!gameStarted || scoreHistory.length === 0) return;
-    persistArchivedSession({
-      v: 1,
-      archiveId: activeArchiveId ?? undefined,
-      team1Name,
-      team2Name,
-      team1Score,
-      team2Score,
-      roster,
-      masterOpenQueue,
-      masterWomenQueue,
-      pendingPlayers,
-      gameStarted,
-      lineIndex,
-      pointNumber,
-      openIndex,
-      womenIndex,
-      scoreHistory,
-      openingPull,
-      halfPoint,
-      halfPull,
-      startedAt,
-      lineupSize,
-      startingOpen,
-      splitCycle,
-      softCap,
-      halfAt,
-      endAt,
-      showRoster,
-      setupStep,
-      watchRoomId: watchRoomId ?? undefined,
-      watchWriteKey: watchWriteKey ?? undefined,
-      watchViewKey: watchViewKey ?? undefined,
-    });
+  const buildLiveSession = (): GameSession => ({
+    v: 1,
+    archiveId: activeArchiveId ?? undefined,
+    team1Name,
+    team2Name,
+    team1Score,
+    team2Score,
+    roster,
+    masterOpenQueue,
+    masterWomenQueue,
+    pendingPlayers,
+    gameStarted,
+    lineIndex,
+    pointNumber,
+    openIndex,
+    womenIndex,
+    scoreHistory,
+    openingPull,
+    halfPoint,
+    halfPull,
+    startedAt,
+    lineupSize,
+    startingOpen,
+    splitCycle,
+    softCap,
+    halfAt,
+    endAt,
+    showRoster,
+    setupStep,
+    watchRoomId: watchRoomId ?? undefined,
+    watchWriteKey: watchWriteKey ?? undefined,
+    watchViewKey: watchViewKey ?? undefined,
+  });
+
+  const archiveLiveGame = (ended = false) => {
+    if (!gameStarted || scoreHistory.length === 0) return null;
+    return persistArchivedSession(buildLiveSession(), ended);
+  };
+
+  const continueLabel = `${team1Name} ${team1Score}–${team2Score} ${team2Name}`;
+
+  /** Leave the scoreboard without ending, so the homepage can offer Continue. */
+  const parkOpenGame = () => {
+    const id = archiveLiveGame();
+    const session = buildLiveSession();
+    if (id) session.archiveId = id;
+    flushGameSession(session);
+    if (id) setActiveArchiveId(id);
+    setResumeLabel(continueLabel);
+    exitWatch();
+    setOpenArchiveId(null);
+    setShowHomeScreen(true);
+    setShowRoster(false);
+    setSettingsVisible(false);
   };
 
   const handleContinueGame = (id: string) => {
     const game = archive.find((item) => item.id === id);
     if (!game) return;
+    if (game.ended) {
+      setShowHomeScreen(true);
+      setOpenArchiveId(id);
+      return;
+    }
     const current = loadGameSession();
     if (current?.gameStarted && sameSavedGame(current, game)) {
       applyRestoredSession({ ...current, archiveId: id });
@@ -485,10 +515,14 @@ export default function App() {
 
   const goHome = () => {
     if (gameStarted) {
-      if (!window.confirm('Go home? A game with points is kept on the homepage.')) return;
-      archiveLiveGame();
-      exitWatch();
-      leaveToHome();
+      if (scoreHistory.length === 0) {
+        if (!window.confirm('Go home? No points were scored, so this game will not be saved.')) return;
+        exitWatch();
+        leaveToHome();
+        return;
+      }
+      if (!window.confirm('Go home? This game stays open until you end it.')) return;
+      parkOpenGame();
       return;
     }
     exitWatch();
@@ -497,13 +531,17 @@ export default function App() {
   };
 
   const handleChangeTeam = () => {
-    archiveLiveGame();
+    if (gameStarted && scoreHistory.length > 0) {
+      parkOpenGame();
+      return;
+    }
     leaveToHome();
   };
 
   const handleEndGame = () => {
-    archiveLiveGame();
+    const id = archiveLiveGame(true);
     leaveToHome();
+    if (id) setOpenArchiveId(id);
   };
 
   // Calculate total players used so far for proper rotation
@@ -1172,6 +1210,10 @@ export default function App() {
   const openArchive = openArchiveId
     ? archive.find((game) => game.id === openArchiveId) ?? null
     : null;
+  const liveSession = sessionReady && showHomeScreen ? loadGameSession() : null;
+  const liveGameInList =
+    liveSession?.gameStarted === true &&
+    archive.some((game) => !game.ended && sameSavedGame(liveSession, game));
 
   if (showHomeScreen && openArchive) {
     return (
@@ -1187,13 +1229,15 @@ export default function App() {
     return (
       <HomeScreen
         onStart={handleStartGame}
-        onResume={resumeLabel ? handleResumeGame : undefined}
+        onResume={resumeLabel && !liveGameInList ? handleResumeGame : undefined}
         resumeLabel={resumeLabel}
         onForgetTeam={handleForgetTeam}
         archivedGames={archive.map((game) => ({
           id: game.id,
           title: archiveTitle(game, archive),
+          teams: `${game.team1Name} vs ${game.team2Name}`,
           score: `${game.team1Score}–${game.team2Score}`,
+          ended: game.ended === true,
         }))}
         onContinueGame={handleContinueGame}
         onForgetGame={handleForgetGame}
@@ -1274,6 +1318,7 @@ export default function App() {
             setSetupStep('line');
           }}
           onHome={goHome}
+          onEndGame={handleEndGame}
           pendingCount={pendingPlayers.length}
           roster={roster}
           openQueue={currentOpenQueue}

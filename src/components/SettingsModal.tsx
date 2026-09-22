@@ -603,8 +603,8 @@ export function SettingsModal({
               </h3>
               <p className="confirm-copy">
                 {hasPoints
-                  ? 'Save this game on the homepage and leave the scoreboard.'
-                  : 'Leave this game. No points were scored, so it will not be saved.'}
+                  ? 'Save this game and open the summary.'
+                  : 'No points scored, so nothing is saved.'}
               </p>
               <div className="confirm-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => setConfirmEnd(false)}>

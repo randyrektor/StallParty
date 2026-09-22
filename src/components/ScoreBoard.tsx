@@ -88,6 +88,7 @@ interface ScoreBoardProps {
   } | null;
   onTagPlayer?: (playerId: string) => void;
   onDismissTag?: () => void;
+  onEndGame?: () => void;
 }
 
 export function ScoreBoard({
@@ -130,10 +131,12 @@ export function ScoreBoard({
   tagStrip = null,
   onTagPlayer,
   onDismissTag,
+  onEndGame,
 }: ScoreBoardProps) {
   const [subOut, setSubOut] = useState<Player | null>(null);
   const [halfOpen, setHalfOpen] = useState(false);
   const [dismissedReminder, setDismissedReminder] = useState('');
+  const [capPromptDismissed, setCapPromptDismissed] = useState(false);
   const now = useNowTick();
   const team1TileRef = useRef<HTMLButtonElement>(null);
   const team2TileRef = useRef<HTMLButtonElement>(null);
@@ -153,6 +156,7 @@ export function ScoreBoard({
   const nextSeats = getLineSeats(nextOpenQueue, nextWomanQueue, nextPattern);
 
   const capReached = isSoftCapReached(team1Score, team2Score, softCap);
+  const showCapPrompt = gameStarted && capReached && !capPromptDismissed;
   const clockReminder = activeClockReminder(halfAt, endAt, new Date(now));
   const reminderKey = clockReminder ? `${clockReminder.kind}:${clockReminder.phase}` : '';
 
@@ -176,13 +180,19 @@ export function ScoreBoard({
   const closeSubPicker = useCallback(() => setSubOut(null), []);
 
   useEffect(() => {
-    if (!subOut) return;
+    if (!capReached) setCapPromptDismissed(false);
+  }, [capReached]);
+
+  useEffect(() => {
+    if (!subOut && !showCapPrompt) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeSubPicker();
+      if (e.key !== 'Escape') return;
+      if (showCapPrompt) setCapPromptDismissed(true);
+      else closeSubPicker();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [subOut, closeSubPicker]);
+  }, [subOut, closeSubPicker, showCapPrompt]);
 
   const handlePickSubIn = (inPlayer: Player) => {
     if (subOut && onSubstitute) {
@@ -363,6 +373,37 @@ export function ScoreBoard({
               })}
               <button type="button" className="btn btn-ghost confirm-actions-back" onClick={() => setHalfOpen(false)}>
                 Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCapPrompt && (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={() => setCapPromptDismissed(true)}
+        >
+          <div
+            className="confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="score-cap-end-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="score-cap-end-title" className="confirm-title">
+              End game?
+            </h3>
+            <p className="confirm-copy">
+              Score cap {softCap} is reached.
+            </p>
+            <div className="confirm-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setCapPromptDismissed(true)}>
+                No
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => onEndGame?.()}>
+                Yes
               </button>
             </div>
           </div>

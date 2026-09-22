@@ -41,6 +41,8 @@ export type ArchivedGame = {
   points: ArchivedPoint[];
   /** Full scoreboard state so the game can be continued. Missing on older saves. */
   session?: GameSession;
+  /** Set when End Game is pressed. Until then the scoreboard can be continued. */
+  ended?: boolean;
 };
 
 const MONTHS = [
@@ -162,6 +164,7 @@ function isArchivedGame(value: unknown): value is ArchivedGame {
     game.points.every(isPoint);
   if (!ok) return false;
   if (game.session != null && !isStoredSession(game.session)) delete game.session;
+  game.ended = game.ended === true;
   return true;
 }
 
