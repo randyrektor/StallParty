@@ -20,11 +20,11 @@ function statusCopy(
     return audience === 'team'
       ? {
           kicker: 'Preview on this phone',
-          hint: 'This is the reader teammates will see, including the line. Close to go back to scoring.',
+          hint: 'This is the reader teammates will see, including the line.',
         }
       : {
           kicker: 'Preview on this phone',
-          hint: 'This is the reader opponents will see. Close to go back to scoring.',
+          hint: 'This is the reader opponents will see.',
         };
   }
   if (status === 'live') {
@@ -130,14 +130,10 @@ export function SpectatorScreen({
   snapshot,
   linkStatus = 'snapshot',
   audience = 'public',
-  onLeave,
-  onHome,
 }: {
   snapshot: SpectatorSnapshot | null;
   linkStatus?: SpectatorLinkStatus;
   audience?: 'public' | 'team';
-  onLeave?: () => void;
-  onHome?: () => void;
 }) {
   const copy = statusCopy(linkStatus, audience);
   const now = useNowTick();
@@ -146,17 +142,7 @@ export function SpectatorScreen({
     : null;
   if (!snapshot) {
     return (
-      <AppShell
-        title="Score reader"
-        onHome={onHome}
-        left={
-          onLeave ? (
-            <button type="button" className="btn btn-ghost" onClick={onLeave}>
-              Close
-            </button>
-          ) : null
-        }
-      >
+      <AppShell title="Score reader">
         <div className="spectator-card">
           <p className={`spectator-kicker spectator-kicker--${linkStatus}`}>{copy.kicker}</p>
           <p className="spectator-hint">Waiting for the scorer. Leave this tab open.</p>
@@ -170,17 +156,7 @@ export function SpectatorScreen({
   const showGender = snapshotShowsGender(snapshot) && !showNames;
 
   return (
-    <AppShell
-      title="Score reader"
-      onHome={onHome}
-      left={
-        onLeave ? (
-          <button type="button" className="btn btn-ghost" onClick={onLeave}>
-            Close
-          </button>
-        ) : null
-      }
-    >
+    <AppShell title="Score reader">
       <div className="spectator-card">
         <p className={`spectator-kicker spectator-kicker--${linkStatus}`}>{copy.kicker}</p>
         <div className="score-top-bar spectator-score-bar">

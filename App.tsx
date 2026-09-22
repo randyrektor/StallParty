@@ -1114,8 +1114,6 @@ export default function App() {
       <SpectatorScreen
         snapshot={watchHash.snapshot}
         linkStatus="snapshot"
-        onLeave={exitWatch}
-        onHome={goHome}
       />
     );
   }
@@ -1126,8 +1124,6 @@ export default function App() {
         snapshot={roomSnapshot}
         linkStatus={roomStatus}
         audience={viewingAsTeam ? 'team' : 'public'}
-        onLeave={exitWatch}
-        onHome={goHome}
       />
     );
   }
