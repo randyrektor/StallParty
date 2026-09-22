@@ -52,6 +52,8 @@ export type GameSession = {
   watchWriteKey?: string;
   /** Read-only key for the teammate spectator link. Not the write key. */
   watchViewKey?: string;
+  /** Homepage game this session continues, when it was saved there. */
+  archiveId?: string;
 };
 
 function isLineupSize(n: unknown): n is LineupSize {

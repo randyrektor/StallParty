@@ -131,11 +131,13 @@ export function SpectatorScreen({
   linkStatus = 'snapshot',
   audience = 'public',
   onLeave,
+  onHome,
 }: {
   snapshot: SpectatorSnapshot | null;
   linkStatus?: SpectatorLinkStatus;
   audience?: 'public' | 'team';
   onLeave?: () => void;
+  onHome?: () => void;
 }) {
   const copy = statusCopy(linkStatus, audience);
   const now = useNowTick();
@@ -146,6 +148,7 @@ export function SpectatorScreen({
     return (
       <AppShell
         title="Score reader"
+        onHome={onHome}
         left={
           onLeave ? (
             <button type="button" className="btn btn-ghost" onClick={onLeave}>
@@ -169,6 +172,7 @@ export function SpectatorScreen({
   return (
     <AppShell
       title="Score reader"
+      onHome={onHome}
       left={
         onLeave ? (
           <button type="button" className="btn btn-ghost" onClick={onLeave}>

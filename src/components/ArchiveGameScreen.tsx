@@ -87,6 +87,7 @@ export function ArchiveGameScreen({
     <AppShell
       title={`${game.team1Name} vs ${game.team2Name}`}
       width="narrow"
+      onHome={onBack}
       left={
         <button type="button" className="btn btn-ghost" onClick={onBack}>
           Back

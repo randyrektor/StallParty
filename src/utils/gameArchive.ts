@@ -1,3 +1,13 @@
+import type { LineupSize, Player, SplitCycle } from '../types';
+import type { GameSession } from './gameSession';
+import {
+  assignNumbersByGender,
+  clampOpenCount,
+  DEFAULT_STARTING_OPEN,
+  getGenderPattern,
+  isSplitCycleAvailable,
+} from './rotationHelpers';
+
 export const GAME_ARCHIVE_KEY = 'ultimate-game-archive';
 export const GAME_ARCHIVE_LIMIT = 30;
 
@@ -29,6 +39,8 @@ export type ArchivedGame = {
   openingPull: ArchiveSide | null;
   halfPoint: number | null;
   points: ArchivedPoint[];
+  /** Full scoreboard state so the game can be continued. Missing on older saves. */
+  session?: GameSession;
 };
 
 const MONTHS = [
@@ -113,10 +125,29 @@ function isPoint(value: unknown): value is ArchivedPoint {
   );
 }
 
+function isLineupSize(value: unknown): value is LineupSize {
+  return value === 4 || value === 5 || value === 6 || value === 7;
+}
+
+function isStoredSession(value: unknown): value is GameSession {
+  if (!value || typeof value !== 'object') return false;
+  const session = value as GameSession;
+  return (
+    session.v === 1 &&
+    isLineupSize(session.lineupSize) &&
+    typeof session.team1Name === 'string' &&
+    Array.isArray(session.roster) &&
+    Array.isArray(session.masterOpenQueue) &&
+    Array.isArray(session.masterWomenQueue) &&
+    Array.isArray(session.pendingPlayers) &&
+    Array.isArray(session.scoreHistory)
+  );
+}
+
 function isArchivedGame(value: unknown): value is ArchivedGame {
   if (!value || typeof value !== 'object') return false;
   const game = value as ArchivedGame;
-  return (
+  const ok =
     typeof game.id === 'string' &&
     typeof game.startedAt === 'string' &&
     typeof game.team1Name === 'string' &&
@@ -128,8 +159,10 @@ function isArchivedGame(value: unknown): value is ArchivedGame {
     (game.openingPull == null || isSide(game.openingPull)) &&
     (game.halfPoint == null || typeof game.halfPoint === 'number') &&
     Array.isArray(game.points) &&
-    game.points.every(isPoint)
-  );
+    game.points.every(isPoint);
+  if (!ok) return false;
+  if (game.session != null && !isStoredSession(game.session)) delete game.session;
+  return true;
 }
 
 export function loadGameArchive(): ArchivedGame[] {
@@ -168,4 +201,128 @@ export function replaceArchivedGame(game: ArchivedGame): ArchivedGame[] {
   const next = current.map((existing) => (existing.id === game.id ? game : existing));
   writeGameArchive(next);
   return next;
+}
+
+export function forgetArchivedGame(id: string): ArchivedGame[] {
+  const next = loadGameArchive().filter((game) => game.id !== id);
+  writeGameArchive(next);
+  return next;
+}
+
+function openCountOnLine(game: ArchivedGame, point: ArchivedPoint): number | null {
+  if (point.linePlayerIds.length === 0) return null;
+  const gender = new Map(game.roster.map((player) => [player.uuid, player.gender]));
+  let open = 0;
+  let known = 0;
+  for (const id of point.linePlayerIds) {
+    const side = gender.get(id);
+    if (!side) continue;
+    known += 1;
+    if (side === 'O') open += 1;
+  }
+  return known === 0 ? null : open;
+}
+
+function inferLineupSize(game: ArchivedGame): LineupSize {
+  const counts = new Map<number, number>();
+  for (const point of game.points) {
+    const size = point.linePlayerIds.length;
+    if (size < 4 || size > 7) continue;
+    counts.set(size, (counts.get(size) ?? 0) + 1);
+  }
+  let best: LineupSize = 7;
+  let bestCount = 0;
+  counts.forEach((count, size) => {
+    if (count > bestCount && isLineupSize(size)) {
+      best = size;
+      bestCount = count;
+    }
+  });
+  return best;
+}
+
+function inferSplitCycle(game: ArchivedGame, size: LineupSize, startingOpen: number): SplitCycle {
+  const cycles: SplitCycle[] = ['same', 'ABBA', 'AAB'];
+  let best: SplitCycle = 'ABBA';
+  let bestScore = -1;
+  for (const cycle of cycles) {
+    if (cycle !== 'same' && !isSplitCycleAvailable(size, startingOpen, cycle)) continue;
+    let score = 0;
+    game.points.forEach((point, index) => {
+      const open = openCountOnLine(game, point);
+      if (open == null) return;
+      if (getGenderPattern(index, size, startingOpen, cycle).men === open) score += 1;
+    });
+    if (score > bestScore) {
+      best = cycle;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Rebuild a playable scoreboard from a saved game, preferring its stored session. */
+export function sessionFromArchive(game: ArchivedGame): GameSession {
+  if (game.session) {
+    return {
+      ...game.session,
+      archiveId: game.id,
+      gameStarted: true,
+      showRoster: false,
+    };
+  }
+  const roster: Player[] = assignNumbersByGender(
+    game.roster.map((player) => ({
+      uuid: player.uuid,
+      name: player.name,
+      gender: player.gender,
+      number: 0,
+    }))
+  );
+  const lineupSize = inferLineupSize(game);
+  const firstOpen = game.points.length > 0 ? openCountOnLine(game, game.points[0]) : null;
+  const startingOpen = clampOpenCount(firstOpen ?? DEFAULT_STARTING_OPEN[lineupSize], lineupSize);
+  const splitCycle = inferSplitCycle(game, lineupSize, startingOpen);
+  const lastPoint = game.points[game.points.length - 1];
+  const halfPoint = game.points.find(
+    (point) => point.pointNumber === game.halfPoint && (point.pullOverride === 1 || point.pullOverride === 2)
+  );
+  return {
+    v: 1,
+    archiveId: game.id,
+    team1Name: game.team1Name,
+    team2Name: game.team2Name,
+    team1Score: game.team1Score,
+    team2Score: game.team2Score,
+    roster,
+    masterOpenQueue: roster.filter((player) => player.gender === 'O'),
+    masterWomenQueue: roster.filter((player) => player.gender === 'W'),
+    pendingPlayers: [],
+    gameStarted: true,
+    lineIndex: game.points.length,
+    pointNumber: (lastPoint?.pointNumber ?? game.team1Score + game.team2Score) + 1,
+    openIndex: 0,
+    womenIndex: 0,
+    scoreHistory: game.points.map((point, index) => ({
+      team: point.team,
+      lineIndex: index,
+      pointNumber: point.pointNumber,
+      openIndex: 0,
+      womenIndex: 0,
+      pendingPlayerIds: [],
+      linePlayerIds: point.linePlayerIds,
+      ...(point.scorerId ? { scorerId: point.scorerId } : {}),
+      ...(point.throwerId ? { throwerId: point.throwerId } : {}),
+      ...(point.pullOverride ? { pullOverride: point.pullOverride } : {}),
+    })),
+    openingPull: game.openingPull,
+    halfPoint: game.halfPoint,
+    halfPull: halfPoint?.pullOverride ?? null,
+    startedAt: game.startedAt,
+    lineupSize,
+    startingOpen,
+    splitCycle,
+    showRoster: false,
+    setupStep: 'line',
+  };
 }

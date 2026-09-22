@@ -3,10 +3,13 @@ import {
   GAME_ARCHIVE_KEY,
   GAME_ARCHIVE_LIMIT,
   archiveTitle,
+  forgetArchivedGame,
   loadGameArchive,
   rememberArchivedGame,
+  sessionFromArchive,
   type ArchivedGame,
 } from './gameArchive';
+import type { GameSession } from './gameSession';
 
 const memory = new Map<string, string>();
 
@@ -78,5 +81,68 @@ describe('rememberArchivedGame', () => {
   it('ignores a corrupt archive', () => {
     memory.set(GAME_ARCHIVE_KEY, '{');
     expect(loadGameArchive()).toEqual([]);
+  });
+
+  it('forgets one saved game', () => {
+    rememberArchivedGame(game('keep', '2026-07-12T18:00:00'));
+    rememberArchivedGame(game('drop', '2026-07-13T18:00:00'));
+    expect(forgetArchivedGame('drop').map((item) => item.id)).toEqual(['keep']);
+    expect(loadGameArchive().map((item) => item.id)).toEqual(['keep']);
+  });
+
+  it('keeps a saved game when its stored scoreboard is corrupt', () => {
+    const saved = game('legacy', '2026-07-12T18:00:00');
+    memory.set(GAME_ARCHIVE_KEY, JSON.stringify([{ ...saved, session: { v: 1 } }]));
+    const loaded = loadGameArchive();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.session).toBeUndefined();
+    expect(sessionFromArchive(loaded[0]!).pointNumber).toBe(2);
+  });
+});
+
+describe('sessionFromArchive', () => {
+  it('continues from the stored scoreboard when one was saved', () => {
+    const session: GameSession = {
+      v: 1,
+      team1Name: 'Floodwall',
+      team2Name: 'Wildfire',
+      team1Score: 4,
+      team2Score: 3,
+      roster: [{ uuid: 'p1', name: 'Haley', gender: 'W', number: 1 }],
+      masterOpenQueue: [],
+      masterWomenQueue: [{ uuid: 'p1', name: 'Haley', gender: 'W', number: 1 }],
+      pendingPlayers: [],
+      gameStarted: true,
+      lineIndex: 7,
+      pointNumber: 8,
+      openIndex: 2,
+      womenIndex: 3,
+      scoreHistory: [],
+      lineupSize: 5,
+      startingOpen: 3,
+      splitCycle: 'AAB',
+      showRoster: true,
+      setupStep: 'roster',
+    };
+    const restored = sessionFromArchive({ ...game('saved', '2026-07-12T18:00:00'), session });
+    expect(restored.archiveId).toBe('saved');
+    expect(restored.pointNumber).toBe(8);
+    expect(restored.lineIndex).toBe(7);
+    expect(restored.openIndex).toBe(2);
+    expect(restored.showRoster).toBe(false);
+    expect(restored.gameStarted).toBe(true);
+  });
+
+  it('rebuilds the next point from an older summary', () => {
+    const restored = sessionFromArchive(
+      game('old', '2026-07-12T18:00:00')
+    );
+    expect(restored.team1Score).toBe(15);
+    expect(restored.team2Score).toBe(12);
+    expect(restored.pointNumber).toBe(2);
+    expect(restored.roster.map((player) => player.name)).toEqual(['Haley']);
+    expect(restored.masterWomenQueue).toHaveLength(1);
+    expect(restored.gameStarted).toBe(true);
+    expect(restored.archiveId).toBe('old');
   });
 });

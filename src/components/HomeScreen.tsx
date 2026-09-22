@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { APP_NAME, COLORS, THEME } from '../constants';
 import { AppShell } from './AppShell';
 import {
@@ -16,7 +16,89 @@ interface HomeScreenProps {
   resumeLabel?: string | null;
   onForgetTeam?: (teamName: string) => void;
   archivedGames?: { id: string; title: string; score: string }[];
-  onOpenArchive?: (id: string) => void;
+  onContinueGame?: (id: string) => void;
+  onForgetGame?: (id: string) => void;
+}
+
+const HOLD_MS = 600;
+const VISIBLE_GAMES = 6;
+
+function fitVisibleGames(list: HTMLDivElement) {
+  const row = list.querySelector('button');
+  if (!row) return;
+  const gap = Number.parseFloat(getComputedStyle(list).rowGap) || 0;
+  const height = row.getBoundingClientRect().height;
+  list.style.maxHeight = `${Math.ceil(VISIBLE_GAMES * height + (VISIBLE_GAMES - 1) * gap)}px`;
+}
+
+function HoldButton({
+  className,
+  onPress,
+  onHold,
+  children,
+}: {
+  className: string;
+  onPress: () => void;
+  onHold: () => void;
+  children: React.ReactNode;
+}) {
+  const timer = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const holdFired = useRef(false);
+  const [holding, setHolding] = useState(false);
+
+  const clearTimer = () => {
+    if (timer.current != null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+
+  useEffect(() => clearTimer, []);
+
+  const endPress = () => {
+    clearTimer();
+    setHolding(false);
+  };
+
+  const triggerHold = () => {
+    if (holdFired.current) return;
+    holdFired.current = true;
+    endPress();
+    suppressClick.current = true;
+    onHold();
+  };
+
+  return (
+    <button
+      type="button"
+      className={`${className}${holding ? ' is-holding' : ''}`}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        holdFired.current = false;
+        suppressClick.current = false;
+        setHolding(true);
+        clearTimer();
+        timer.current = window.setTimeout(triggerHold, HOLD_MS);
+      }}
+      onPointerUp={endPress}
+      onPointerLeave={endPress}
+      onPointerCancel={endPress}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        triggerHold();
+      }}
+      onClick={() => {
+        if (suppressClick.current) {
+          suppressClick.current = false;
+          return;
+        }
+        onPress();
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function HomeScreen({
@@ -25,14 +107,31 @@ export function HomeScreen({
   resumeLabel,
   onForgetTeam,
   archivedGames = [],
-  onOpenArchive,
+  onContinueGame,
+  onForgetGame,
 }: HomeScreenProps) {
   const [teamName, setTeamName] = useState('');
   const [savedTeams, setSavedTeams] = useState<string[]>([]);
+  const gameListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setSavedTeams(loadRecentTeams());
   }, []);
+
+  useEffect(() => {
+    const list = gameListRef.current;
+    if (!list) return;
+    const fit = () => fitVisibleGames(list);
+    fit();
+    const observer = new ResizeObserver(fit);
+    const row = list.querySelector('button');
+    if (row) observer.observe(row);
+    window.addEventListener('resize', fit);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fit);
+    };
+  }, [archivedGames]);
 
   const handleStart = () => {
     if (!teamName.trim()) {
@@ -69,7 +168,8 @@ export function HomeScreen({
 
   return (
     <AppShell showHeader={false} width="narrow" center>
-      <div className="shell-card">
+      <div className="shell-card home-card">
+          <div className="home-card-body">
           <h1 className="home-title" style={styles.title}>{APP_NAME}</h1>
           <p style={styles.subtitle}>Ultimate frisbee scorekeeper</p>
           
@@ -91,26 +191,24 @@ export function HomeScreen({
 
           {savedTeams.length > 0 && (
             <div style={styles.savedTeamsSection}>
-              <label style={styles.label}>Recent Teams</label>
+              <label style={styles.label}>
+                Recent Teams
+                <span className="home-hold-hint">Hold to remove</span>
+              </label>
               <div style={styles.teamList}>
                 {savedTeams.map((team) => (
-                  <div key={team} className="recent-team-row">
-                    <button
-                      type="button"
-                      className={`recent-team${teamName === team ? ' is-selected' : ''}`}
-                      onClick={() => handleSelectTeam(team)}
-                    >
-                      {team}
-                    </button>
-                    <button
-                      type="button"
-                      className="recent-team-remove"
-                      aria-label={`Remove ${team} from recent teams`}
-                      onClick={() => handleRemoveTeam(team)}
-                    >
-                      ×
-                    </button>
-                  </div>
+                  <HoldButton
+                    key={team}
+                    className={`recent-team${teamName === team ? ' is-selected' : ''}`}
+                    onPress={() => handleSelectTeam(team)}
+                    onHold={() => {
+                      if (window.confirm(`Remove ${team} from recent teams?`)) {
+                        handleRemoveTeam(team);
+                      }
+                    }}
+                  >
+                    {team}
+                  </HoldButton>
                 ))}
               </div>
             </div>
@@ -118,42 +216,52 @@ export function HomeScreen({
 
           {archivedGames.length > 0 && (
             <div style={styles.savedTeamsSection}>
-              <label style={styles.label}>Games</label>
-              <div style={styles.teamList}>
+              <label style={styles.label}>
+                Games
+                <span className="home-hold-hint">Hold to remove</span>
+              </label>
+              <div ref={gameListRef} className="home-game-list" style={styles.teamList}>
                 {archivedGames.map((game) => (
-                  <button
+                  <HoldButton
                     key={game.id}
-                    type="button"
                     className="recent-team archive-game"
-                    onClick={() => onOpenArchive?.(game.id)}
+                    onPress={() => onContinueGame?.(game.id)}
+                    onHold={() => {
+                      if (window.confirm(`Delete ${game.title}?`)) {
+                        onForgetGame?.(game.id);
+                      }
+                    }}
                   >
                     <span>{game.title}</span>
                     <span className="archive-game-score">{game.score}</span>
-                  </button>
+                  </HoldButton>
                 ))}
               </div>
             </div>
           )}
+          </div>
 
-          {onResume && resumeLabel && (
+          <div className="home-actions">
+            {onResume && resumeLabel && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ ...styles.startButton, backgroundColor: 'transparent', color: THEME.text, border: `1.5px solid ${THEME.borderSoft}`, boxShadow: 'none' }}
+                onClick={onResume}
+              >
+                Resume {resumeLabel}
+              </button>
+            )}
+
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ ...styles.startButton, marginBottom: 12, backgroundColor: 'transparent', color: THEME.text, border: `1.5px solid ${THEME.borderSoft}`, boxShadow: 'none' }}
-              onClick={onResume}
+              className="btn btn-primary"
+              style={styles.startButton}
+              onClick={handleStart}
             >
-              Resume {resumeLabel}
+              Continue
             </button>
-          )}
-
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={styles.startButton}
-            onClick={handleStart}
-          >
-            Continue
-          </button>
+          </div>
       </div>
     </AppShell>
   );

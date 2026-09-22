@@ -70,7 +70,14 @@ interface ScoreBoardProps {
   onKickoff?: (pulling: 1 | 2) => void;
   onHalfPull?: (pulling: 1 | 2) => void;
   halfActive?: boolean;
+  /** A team has been chosen for half, so the button stays closed. */
+  halfChosen?: boolean;
+  /** Who is already set to pull this point at half, if the captain chose. The modal shows the other team as receiving. */
+  halfChoice?: 1 | 2 | null;
+  /** Team that received point 1. The other team is the suggested receiver at half. */
+  suggestedHalfPull?: 1 | 2 | null;
   onBackToSetup?: () => void;
+  onHome?: () => void;
   onSubstitute?: (outPlayer: Player, inPlayer: Player) => void;
   pullLabel?: string | null;
   tagStrip?: {
@@ -113,7 +120,11 @@ export function ScoreBoard({
   onKickoff,
   onHalfPull,
   halfActive = false,
+  halfChosen = false,
+  halfChoice = null,
+  suggestedHalfPull = null,
   onBackToSetup,
+  onHome,
   onSubstitute,
   pullLabel = null,
   tagStrip = null,
@@ -194,6 +205,7 @@ export function ScoreBoard({
   return (
     <AppShell
       title={team1Name}
+      onHome={onHome}
       left={
         gameStarted ? (
           <>
@@ -218,8 +230,12 @@ export function ScoreBoard({
             <button
               type="button"
               className="btn btn-ghost"
-              aria-pressed={halfActive}
-              onClick={() => setHalfOpen(true)}
+              aria-pressed={halfActive || halfChosen}
+              disabled={halfChosen}
+              style={halfChosen ? { opacity: 0.45 } : undefined}
+              onClick={() => {
+                if (!halfChosen) setHalfOpen(true);
+              }}
             >
               Halftime
             </button>
@@ -288,16 +304,13 @@ export function ScoreBoard({
             aria-labelledby="kickoff-confirm-title"
           >
             <h3 id="kickoff-confirm-title" className="confirm-title">
-              Who is pulling?
+              Who is receiving?
             </h3>
-            <p className="confirm-copy">
-              If you score, you pull next. If they score, they pull next.
-            </p>
             <div className="confirm-actions confirm-actions--pull">
-              <button type="button" className="btn btn-primary" onClick={() => onKickoff?.(1)}>
+              <button type="button" className="btn btn-primary" onClick={() => onKickoff?.(2)}>
                 {team1Name}
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => onKickoff?.(2)}>
+              <button type="button" className="btn btn-primary" onClick={() => onKickoff?.(1)}>
                 {team2Name}
               </button>
               <button type="button" className="btn btn-ghost confirm-actions-back" onClick={onBackToSetup}>
@@ -308,7 +321,7 @@ export function ScoreBoard({
         </div>
       )}
 
-      {halfOpen && (
+      {halfOpen && !halfChosen && (
         <div
           className="confirm-overlay confirm-overlay--soft"
           onClick={() => setHalfOpen(false)}
@@ -322,32 +335,32 @@ export function ScoreBoard({
             aria-labelledby="half-pull-title"
           >
             <h3 id="half-pull-title" className="confirm-title">
-              Who is pulling at half?
+              Who is receiving at half?
             </h3>
-            <p className="confirm-copy">
-              After this pull, if you score, you pull next. If they score, they pull next.
-            </p>
+            {suggestedHalfPull === 1 || suggestedHalfPull === 2 ? (
+              <p className="confirm-copy">
+                {suggestedHalfPull === 1 ? team1Name : team2Name} received point 1.
+              </p>
+            ) : null}
             <div className="confirm-actions confirm-actions--pull">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  onHalfPull?.(1);
-                  setHalfOpen(false);
-                }}
-              >
-                {team1Name}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  onHalfPull?.(2);
-                  setHalfOpen(false);
-                }}
-              >
-                {team2Name}
-              </button>
+              {([1, 2] as const).map((side) => {
+                const chosenPull = halfChoice ?? suggestedHalfPull;
+                const suggestedReceiver = chosenPull === 1 ? 2 : chosenPull === 2 ? 1 : null;
+                const suggested = suggestedReceiver == null || suggestedReceiver === side;
+                return (
+                  <button
+                    key={side}
+                    type="button"
+                    className={`btn ${suggested ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => {
+                      onHalfPull?.(side === 1 ? 2 : 1);
+                      setHalfOpen(false);
+                    }}
+                  >
+                    {side === 1 ? team1Name : team2Name}
+                  </button>
+                );
+              })}
               <button type="button" className="btn btn-ghost confirm-actions-back" onClick={() => setHalfOpen(false)}>
                 Back
               </button>

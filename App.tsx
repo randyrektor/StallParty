@@ -26,13 +26,15 @@ import {
 import { COLORS } from './src/constants';
 import { loadRosterForTeam, saveRosterForTeam } from './src/utils/rosterStorage';
 import { mergeImportedPlayers, type ParsedRosterRow } from './src/utils/rosterImport';
-import { loadGameSession, scheduleSaveGameSession, clearGameSession, clearGameSessionForTeam, type GameSession } from './src/utils/gameSession';
+import { loadGameSession, saveGameSession, scheduleSaveGameSession, clearGameSession, clearGameSessionForTeam, type GameSession } from './src/utils/gameSession';
 import { applyGoalTag } from './src/utils/goalTags';
 import {
   loadGameArchive,
   rememberArchivedGame,
   replaceArchivedGame,
+  forgetArchivedGame,
   archiveTitle,
+  sessionFromArchive,
   type ArchivedGame,
 } from './src/utils/gameArchive';
 import { pullingTeamForPoint } from './src/utils/possession';
@@ -109,6 +111,7 @@ function archivedGameFromSession(session: GameSession, id: string): ArchivedGame
       ...(event.throwerId ? { throwerId: event.throwerId } : {}),
       ...(event.pullOverride ? { pullOverride: event.pullOverride } : {}),
     })),
+    session: { ...session, archiveId: id },
   };
 }
 
@@ -193,6 +196,7 @@ export default function App() {
   const [dismissedTagPoint, setDismissedTagPoint] = useState<number | null>(null);
   const [archive, setArchive] = useState<ArchivedGame[]>(() => loadGameArchive());
   const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
+  const [activeArchiveId, setActiveArchiveId] = useState<string | null>(null);
 
   // Track rotation index for men and women
   const [openIndex, setOpenIndex] = useState(0);
@@ -263,16 +267,15 @@ export default function App() {
       open: session.startingOpen,
       cycle: session.splitCycle,
     };
-    if (session.softCap !== undefined) setSoftCap(parseSoftCap(session.softCap));
+    setSoftCap(parseSoftCap(session.softCap));
     setHalfAt(parseGameClockTime(session.halfAt));
     setEndAt(parseGameClockTime(session.endAt));
     setShowRoster(false);
     setSetupStep(session.setupStep);
-    if (session.watchRoomId && session.watchWriteKey) {
-      setWatchRoomId(session.watchRoomId);
-      setWatchWriteKey(session.watchWriteKey);
-      setWatchViewKey(session.watchViewKey ?? null);
-    }
+    setWatchRoomId(session.watchRoomId ?? null);
+    setWatchWriteKey(session.watchWriteKey ?? null);
+    setWatchViewKey(session.watchViewKey ?? null);
+    setActiveArchiveId(session.archiveId ?? null);
     setShowHomeScreen(false);
     setResumeLabel(null);
   };
@@ -298,6 +301,7 @@ export default function App() {
     setWatchRoomId(null);
     setWatchWriteKey(null);
     setWatchViewKey(null);
+    setActiveArchiveId(null);
     clearGameSession();
   }, []);
 
@@ -311,11 +315,24 @@ export default function App() {
     setWomenIndex(0);
   }, []);
 
+  const sameSavedGame = (session: GameSession, game: ArchivedGame) =>
+    session.archiveId === game.id ||
+    (session.startedAt != null &&
+      session.startedAt === game.startedAt &&
+      session.team1Name === game.team1Name &&
+      session.team2Name === game.team2Name);
+
+  const persistArchivedSession = (session: GameSession) => {
+    const match = archive.find((game) => sameSavedGame(session, game));
+    const id = match?.id ?? session.archiveId ?? crypto.randomUUID();
+    const record = archivedGameFromSession({ ...session, archiveId: id }, id);
+    if (!record) return;
+    setArchive(match ? replaceArchivedGame(record) : rememberArchivedGame(record));
+  };
+
   const archiveSessionIfPlayed = (session: GameSession | null) => {
     if (!session) return;
-    const record = archivedGameFromSession(session, crypto.randomUUID());
-    if (!record) return;
-    setArchive(rememberArchivedGame(record));
+    persistArchivedSession(session);
   };
 
   const handleStartGame = (teamName: string) => {
@@ -392,30 +409,63 @@ export default function App() {
 
   const archiveLiveGame = () => {
     if (!gameStarted || scoreHistory.length === 0) return;
-    const record: ArchivedGame = {
-      id: crypto.randomUUID(),
-      startedAt: startedAt || new Date().toISOString(),
+    persistArchivedSession({
+      v: 1,
+      archiveId: activeArchiveId ?? undefined,
       team1Name,
       team2Name,
       team1Score,
       team2Score,
-      roster: roster.map((player) => ({
-        uuid: player.uuid,
-        name: player.name,
-        gender: player.gender,
-      })),
+      roster,
+      masterOpenQueue,
+      masterWomenQueue,
+      pendingPlayers,
+      gameStarted,
+      lineIndex,
+      pointNumber,
+      openIndex,
+      womenIndex,
+      scoreHistory,
       openingPull,
       halfPoint,
-      points: scoreHistory.map((event) => ({
-        team: event.team,
-        pointNumber: event.pointNumber,
-        linePlayerIds: event.linePlayerIds,
-        ...(event.scorerId ? { scorerId: event.scorerId } : {}),
-        ...(event.throwerId ? { throwerId: event.throwerId } : {}),
-        ...(event.pullOverride ? { pullOverride: event.pullOverride } : {}),
-      })),
-    };
-    setArchive(rememberArchivedGame(record));
+      halfPull,
+      startedAt,
+      lineupSize,
+      startingOpen,
+      splitCycle,
+      softCap,
+      halfAt,
+      endAt,
+      showRoster,
+      setupStep,
+      watchRoomId: watchRoomId ?? undefined,
+      watchWriteKey: watchWriteKey ?? undefined,
+      watchViewKey: watchViewKey ?? undefined,
+    });
+  };
+
+  const handleContinueGame = (id: string) => {
+    const game = archive.find((item) => item.id === id);
+    if (!game) return;
+    const current = loadGameSession();
+    if (current?.gameStarted && sameSavedGame(current, game)) {
+      applyRestoredSession({ ...current, archiveId: id });
+      return;
+    }
+    if (current?.gameStarted) archiveSessionIfPlayed(current);
+    const session = sessionFromArchive(game);
+    saveGameSession(session);
+    applyRestoredSession(session);
+  };
+
+  const handleForgetGame = (id: string) => {
+    const game = archive.find((item) => item.id === id);
+    setArchive(forgetArchivedGame(id));
+    if (openArchiveId === id) setOpenArchiveId(null);
+    const current = loadGameSession();
+    if (!current?.gameStarted || !game || !sameSavedGame(current, game)) return;
+    clearGameSession();
+    setResumeLabel(null);
   };
 
   const leaveToHome = () => {
@@ -425,6 +475,24 @@ export default function App() {
     setSetupStep('roster');
     setSettingsVisible(false);
     setResumeLabel(null);
+  };
+
+  const exitWatch = () => {
+    if (window.location.hash) window.location.hash = '';
+    setWatchHash(null);
+  };
+
+  const goHome = () => {
+    if (gameStarted) {
+      if (!window.confirm('Go home? A game with points is kept on the homepage.')) return;
+      archiveLiveGame();
+      exitWatch();
+      leaveToHome();
+      return;
+    }
+    exitWatch();
+    setOpenArchiveId(null);
+    if (!showHomeScreen) leaveToHome();
   };
 
   const handleChangeTeam = () => {
@@ -1004,6 +1072,7 @@ export default function App() {
     watchRoomId: watchRoomId ?? undefined,
     watchWriteKey: watchWriteKey ?? undefined,
     watchViewKey: watchViewKey ?? undefined,
+    archiveId: activeArchiveId ?? undefined,
     });
   }, [
     sessionReady,
@@ -1037,6 +1106,7 @@ export default function App() {
     watchRoomId,
     watchWriteKey,
     watchViewKey,
+    activeArchiveId,
   ]);
 
   if (watchHash?.kind === 'snapshot') {
@@ -1044,10 +1114,8 @@ export default function App() {
       <SpectatorScreen
         snapshot={watchHash.snapshot}
         linkStatus="snapshot"
-        onLeave={() => {
-          window.location.hash = '';
-          setWatchHash(null);
-        }}
+        onLeave={exitWatch}
+        onHome={goHome}
       />
     );
   }
@@ -1058,10 +1126,8 @@ export default function App() {
         snapshot={roomSnapshot}
         linkStatus={roomStatus}
         audience={viewingAsTeam ? 'team' : 'public'}
-        onLeave={() => {
-          window.location.hash = '';
-          setWatchHash(null);
-        }}
+        onLeave={exitWatch}
+        onHome={goHome}
       />
     );
   }
@@ -1119,7 +1185,8 @@ export default function App() {
           title: archiveTitle(game, archive),
           score: `${game.team1Score}–${game.team2Score}`,
         }))}
-        onOpenArchive={setOpenArchiveId}
+        onContinueGame={handleContinueGame}
+        onForgetGame={handleForgetGame}
       />
     );
   }
@@ -1141,6 +1208,7 @@ export default function App() {
           onContinueToLine={() => setSetupStep('line')}
           onReady={() => setShowRoster(false)}
           onOpenSettings={() => setSettingsVisible(true)}
+          onHome={goHome}
           onBack={
             gameStarted
               ? undefined
@@ -1195,6 +1263,7 @@ export default function App() {
             setShowRoster(true);
             setSetupStep('line');
           }}
+          onHome={goHome}
           pendingCount={pendingPlayers.length}
           roster={roster}
           openQueue={currentOpenQueue}
@@ -1206,6 +1275,9 @@ export default function App() {
           onKickoff={handleKickoff}
           onHalfPull={handleHalfPull}
           halfActive={halfPoint === pointNumber && halfPull != null}
+          halfChosen={halfPoint != null && halfPull != null}
+          halfChoice={halfPoint === pointNumber ? halfPull : null}
+          suggestedHalfPull={openingPull === 1 ? 2 : openingPull === 2 ? 1 : null}
           onSubstitute={handleSubstitute}
           pullLabel={
             pullLabel && halfPoint === pointNumber && halfPull ? `Half · ${pullLabel}` : pullLabel

@@ -47,6 +47,7 @@ interface PlayerManagerWebProps {
   onReady?: () => void;
   onOpenSettings?: () => void;
   onBack?: () => void;
+  onHome?: () => void;
   lineupSize?: LineupSize;
   startingOpen?: number;
   splitCycle?: SplitCycle;
@@ -647,6 +648,7 @@ export function PlayerManagerWeb({
   onReady,
   onOpenSettings,
   onBack,
+  onHome,
   lineupSize = 7,
   startingOpen = 4,
   splitCycle = 'ABBA',
@@ -822,6 +824,7 @@ export function PlayerManagerWeb({
   return (
     <AppShell
       title={shellTitle}
+      onHome={onHome}
       left={
         <>
           {onBack && !gameStarted && (
