@@ -113,3 +113,9 @@ The app uses browser localStorage to persist:
 ## Author
 
 Randy Rektor
+
+## License
+
+Copyright (c) 2025-2026 Randy Rektor
+
+Licensed under the [MIT License](LICENSE).
