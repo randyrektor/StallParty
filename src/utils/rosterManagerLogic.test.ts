@@ -4,6 +4,7 @@ import {
   expandRawIndexAfterQueueAppend,
   applyQueueRemovalsForRosterChange,
   applyDragReorderToMasterQueues,
+  applyInPlaceRosterUpdate,
   partitionPendingForLineChange,
   applyPendingActivationsToQueues,
   restoreActivatedPendingAfterUndo,
@@ -126,6 +127,31 @@ describe('applyQueueRemovalsForRosterChange', () => {
     const r = applyQueueRemovalsForRosterChange(opens, women, 1, 0, [opens[0], women[1]]);
     expect(r.masterOpenQueue.map((p) => p.name)).toEqual(['B']);
     expect(r.masterWomenQueue.map((p) => p.name)).toEqual(['M']);
+  });
+});
+
+describe('applyInPlaceRosterUpdate', () => {
+  it('renames a player without moving the rotation window', () => {
+    const opens = [o('A'), o('B')];
+    const women = [w('M')];
+    const renamed = { ...opens[0], name: 'Alex' };
+    const r = applyInPlaceRosterUpdate({
+      masterOpenQueue: opens,
+      masterWomenQueue: women,
+      newRosterActivePlayers: [renamed, opens[1], women[0]],
+    });
+    expect(r?.masterOpenQueue.map((player) => player.name)).toEqual(['Alex', 'B']);
+    expect(r?.masterWomenQueue[0].name).toBe('M');
+  });
+
+  it('returns null when the roster order changed', () => {
+    const opens = [o('A'), o('B')];
+    const r = applyInPlaceRosterUpdate({
+      masterOpenQueue: opens,
+      masterWomenQueue: [],
+      newRosterActivePlayers: [opens[1], opens[0]],
+    });
+    expect(r).toBeNull();
   });
 });
 

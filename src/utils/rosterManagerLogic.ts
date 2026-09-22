@@ -108,6 +108,34 @@ export function applyQueueRemovalsForRosterChange(
   };
 }
 
+function sameUuidOrder(a: Player[], b: Player[]): boolean {
+  return a.length === b.length && a.every((player, index) => player.uuid === b[index]?.uuid);
+}
+
+/**
+ * Jersey, position, and name edits keep the same people in the same order.
+ * Copy those fields onto the queues and leave the rotation window where it is.
+ * Returns null when the order changed, so the caller can treat it as a drag.
+ */
+export function applyInPlaceRosterUpdate(params: {
+  masterOpenQueue: Player[];
+  masterWomenQueue: Player[];
+  newRosterActivePlayers: Player[];
+}): { masterOpenQueue: Player[]; masterWomenQueue: Player[] } | null {
+  const proposedOpen = params.newRosterActivePlayers.filter((player) => player.gender === 'O');
+  const proposedWomen = params.newRosterActivePlayers.filter((player) => player.gender === 'W');
+  if (
+    !sameUuidOrder(proposedOpen, params.masterOpenQueue) ||
+    !sameUuidOrder(proposedWomen, params.masterWomenQueue)
+  ) {
+    return null;
+  }
+  return {
+    masterOpenQueue: proposedOpen,
+    masterWomenQueue: proposedWomen,
+  };
+}
+
 export function applyDragReorderToMasterQueues(params: {
   masterOpenQueue: Player[];
   masterWomenQueue: Player[];

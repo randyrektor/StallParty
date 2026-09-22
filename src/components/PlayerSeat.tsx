@@ -12,6 +12,7 @@ interface PlayerSeatProps extends React.HTMLAttributes<HTMLDivElement> {
   jerseySlot?: React.ReactNode;
   positionSlot?: React.ReactNode;
   statusSlot?: React.ReactNode;
+  nameSlot?: React.ReactNode;
 }
 
 export const PlayerSeat = forwardRef<HTMLDivElement, PlayerSeatProps>(function PlayerSeat(
@@ -26,6 +27,7 @@ export const PlayerSeat = forwardRef<HTMLDivElement, PlayerSeatProps>(function P
     jerseySlot,
     positionSlot,
     statusSlot,
+    nameSlot,
     className = '',
     style,
     children,
@@ -58,9 +60,11 @@ export const PlayerSeat = forwardRef<HTMLDivElement, PlayerSeatProps>(function P
       aria-label={empty ? `Empty ${genderLabel} seat` : name}
       {...rest}
     >
-      <span className="player-seat-name">
-        {empty ? `Empty · ${genderLabel}` : name}
-      </span>
+      {nameSlot ?? (
+        <span className="player-seat-name">
+          {empty ? `Empty · ${genderLabel}` : name}
+        </span>
+      )}
       {statusSlot}
       {(jerseyNode || positionNode) && (
         <span className="player-seat-meta">

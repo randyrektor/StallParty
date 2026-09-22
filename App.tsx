@@ -19,6 +19,7 @@ import {
 import {
   applyQueueRemovalsForRosterChange,
   applyDragReorderToMasterQueues,
+  applyInPlaceRosterUpdate,
   partitionPendingForLineChange,
   restoreActivatedPendingAfterUndo,
   expandRawIndexAfterQueueAppend,
@@ -898,17 +899,27 @@ export default function App() {
     } else {
       const stillPendingIds = new Set(pendingPlayers.map(p => p.uuid));
       const activePlayers = newRoster.filter(p => !stillPendingIds.has(p.uuid));
-      const reordered = applyDragReorderToMasterQueues({
+      const inPlace = applyInPlaceRosterUpdate({
         masterOpenQueue: nextMasterOpenQueue,
         masterWomenQueue: nextMasterWomenQueue,
-        openIndex: nextOpenIndex,
-        womenIndex: nextWomenIndex,
         newRosterActivePlayers: activePlayers,
       });
-      nextMasterOpenQueue = reordered.masterOpenQueue;
-      nextMasterWomenQueue = reordered.masterWomenQueue;
-      nextOpenIndex = reordered.openIndex;
-      nextWomenIndex = reordered.womenIndex;
+      if (inPlace) {
+        nextMasterOpenQueue = inPlace.masterOpenQueue;
+        nextMasterWomenQueue = inPlace.masterWomenQueue;
+      } else {
+        const reordered = applyDragReorderToMasterQueues({
+          masterOpenQueue: nextMasterOpenQueue,
+          masterWomenQueue: nextMasterWomenQueue,
+          openIndex: nextOpenIndex,
+          womenIndex: nextWomenIndex,
+          newRosterActivePlayers: activePlayers,
+        });
+        nextMasterOpenQueue = reordered.masterOpenQueue;
+        nextMasterWomenQueue = reordered.masterWomenQueue;
+        nextOpenIndex = reordered.openIndex;
+        nextWomenIndex = reordered.womenIndex;
+      }
     }
   
     setRoster(newRoster);
@@ -917,7 +928,10 @@ export default function App() {
     setOpenIndex(nextOpenIndex);
     setWomenIndex(nextWomenIndex);
 
-    const stillPending = pendingPlayers.filter(p => newRosterIds.has(p.uuid));
+    const rosterById = new Map(newRoster.map((player) => [player.uuid, player]));
+    const stillPending = pendingPlayers
+      .filter((player) => newRosterIds.has(player.uuid))
+      .map((player) => rosterById.get(player.uuid) ?? player);
     setPendingPlayers(stillPending);
   };
 

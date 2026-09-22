@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { flushSync } from 'react-dom';
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Player, type LineupSize, type SplitCycle, type PlayerPosition, PLAYER_POSITIONS, PLAYER_POSITION_LABELS, parseJersey } from '../types';
@@ -153,13 +154,45 @@ function SortablePlayer({
   isPending: boolean;
   onLongPress: () => void;
   onForcePending?: (player: Player) => void;
-  onUpdate: (player: Player, patch: Pick<Player, 'jersey' | 'position'>) => void;
+  onUpdate: (player: Player, patch: Partial<Pick<Player, 'name' | 'jersey' | 'position'>>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: player.uuid });
   const longPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMoved = useRef(false);
   const startPosition = useRef<{ x: number; y: number } | null>(null);
   const [jerseyText, setJerseyText] = useState(player.jersey != null ? String(player.jersey) : '');
+  const [editingName, setEditingName] = useState(false);
+  const [nameText, setNameText] = useState(player.name);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const cancelNameEdit = useRef(false);
+
+  useEffect(() => {
+    if (!editingName) setNameText(player.name);
+  }, [player.name, editingName]);
+
+  useEffect(() => {
+    if (!editingName) return;
+    const input = nameInputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, [editingName]);
+
+  const commitName = () => {
+    if (cancelNameEdit.current) {
+      cancelNameEdit.current = false;
+      setNameText(player.name);
+      setEditingName(false);
+      return;
+    }
+    const next = capitalizeNameInput(nameText.trim());
+    setEditingName(false);
+    if (!next || next === player.name) {
+      setNameText(player.name);
+      return;
+    }
+    onUpdate(player, { name: next });
+  };
 
   const commitJersey = (raw: string) => {
     setJerseyText(raw);
@@ -237,6 +270,57 @@ function SortablePlayer({
         ref={setNodeRef}
         gender={player.gender}
         name={player.name}
+        nameSlot={
+          editingName ? (
+            <input
+              ref={nameInputRef}
+              className="player-seat-name"
+              value={nameText}
+              autoCapitalize="words"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label={`Edit ${player.name}`}
+              enterKeyHint="done"
+              onPointerDown={stopSeatDrag}
+              onMouseDown={stopSeatDrag}
+              onTouchStart={stopSeatDrag}
+              onClick={stopSeatDrag}
+              onChange={(e) => setNameText(capitalizeNameInput(e.target.value))}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelNameEdit.current = true;
+                  e.currentTarget.blur();
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="player-seat-name"
+              aria-label={`Edit ${player.name}`}
+              onPointerDown={stopSeatDrag}
+              onMouseDown={stopSeatDrag}
+              onTouchStart={stopSeatDrag}
+              onClick={(e) => {
+                e.stopPropagation();
+                flushSync(() => {
+                  setNameText(player.name);
+                  setEditingName(true);
+                });
+                const input = nameInputRef.current;
+                input?.focus();
+                input?.select();
+              }}
+            >
+              {player.name}
+            </button>
+          )
+        }
         pending={isPending}
         statusSlot={
           isPending ? (
@@ -282,7 +366,7 @@ function SortablePlayer({
           opacity: isDragging ? 0.8 : 1,
           transform: CSS.Transform.toString(transform),
           transition,
-          touchAction: 'none',
+          touchAction: 'pan-y',
           paddingRight: isEditMode ? 32 : undefined,
         }}
         {...attributes}
@@ -331,7 +415,7 @@ function AddGhostRow({
   onChange: (value: string) => void;
   onJerseyChange: (value: string) => void;
   onPositionChange: (value: PlayerPosition | '') => void;
-  onSubmit: () => void;
+  onSubmit: (position?: PlayerPosition) => void;
 }) {
   const genderLabel = gender === 'O' ? 'Open' : 'Women';
   return (
@@ -367,7 +451,11 @@ function AddGhostRow({
           />
           <PositionSelect
             value={position}
-            onChange={onPositionChange}
+            onChange={(next) => {
+              onPositionChange(next);
+              // The native picker dismisses the keyboard, so Enter can't confirm.
+              if (next) onSubmit(next);
+            }}
             ariaLabel={`${genderLabel} position`}
           />
         </span>
@@ -407,7 +495,7 @@ function GenderRosterColumn({
   onDelete: (player: Player) => void;
   onLongPress: () => void;
   onForcePending?: (player: Player) => void;
-  onUpdate: (player: Player, patch: { jersey?: number; position?: PlayerPosition }) => void;
+  onUpdate: (player: Player, patch: Partial<Pick<Player, 'name' | 'jersey' | 'position'>>) => void;
   addValue: string;
   addJersey: string;
   addPosition: PlayerPosition | '';
@@ -415,7 +503,7 @@ function GenderRosterColumn({
   onAddChange: (value: string) => void;
   onAddJerseyChange: (value: string) => void;
   onAddPositionChange: (value: PlayerPosition | '') => void;
-  onAddSubmit: () => void;
+  onAddSubmit: (position?: PlayerPosition) => void;
 }) {
   const first = players.slice(0, firstCount);
   const rest = players.slice(firstCount);
@@ -678,8 +766,9 @@ export function PlayerManagerWeb({
   const womenInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { distance: 8 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    // Hold briefly before a touch drag so a scroll flick doesn't reorder.
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
 
   // List order = master rotation queue first (source of truth after subs), then roster-only extras (e.g. pending).
@@ -744,11 +833,11 @@ export function PlayerManagerWeb({
     }));
   }
 
-  function handleAddPlayer(gender: 'O' | 'W') {
+  function handleAddPlayer(gender: 'O' | 'W', positionOverride?: PlayerPosition) {
     const name = capitalizeNameInput((gender === 'O' ? openDraft : womenDraft).trim());
     if (!name) return;
     const jersey = parseJersey(gender === 'O' ? openJersey : womenJersey);
-    const position = gender === 'O' ? openPosition : womenPosition;
+    const position = positionOverride ?? (gender === 'O' ? openPosition : womenPosition);
     onLateArrival({
       name,
       gender,
@@ -798,13 +887,23 @@ export function PlayerManagerWeb({
     URL.revokeObjectURL(url);
   }
 
-  function handleUpdatePlayer(player: Player, patch: { jersey?: number; position?: PlayerPosition }) {
+  function handleUpdatePlayer(
+    player: Player,
+    patch: Partial<Pick<Player, 'name' | 'jersey' | 'position'>>
+  ) {
     onRosterChange(
       roster.map((p) => {
         if (p.uuid !== player.uuid) return p;
-        const next: Player = { ...p, ...patch };
-        if (patch.jersey == null) delete next.jersey;
-        if (!patch.position) delete next.position;
+        const next: Player = { ...p };
+        if (patch.name) next.name = patch.name;
+        if ('jersey' in patch) {
+          if (patch.jersey == null) delete next.jersey;
+          else next.jersey = patch.jersey;
+        }
+        if ('position' in patch) {
+          if (!patch.position) delete next.position;
+          else next.position = patch.position;
+        }
         return next;
       })
     );
@@ -903,7 +1002,7 @@ export function PlayerManagerWeb({
                 onAddChange={setOpenDraft}
                 onAddJerseyChange={setOpenJersey}
                 onAddPositionChange={setOpenPosition}
-                onAddSubmit={() => handleAddPlayer('O')}
+                onAddSubmit={(position) => handleAddPlayer('O', position)}
               />
             </DndContext>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handlePlayerDragStart} onDragEnd={(e) => handlePlayerDragEnd(e, 'W')}>
@@ -926,7 +1025,7 @@ export function PlayerManagerWeb({
                 onAddChange={setWomenDraft}
                 onAddJerseyChange={setWomenJersey}
                 onAddPositionChange={setWomenPosition}
-                onAddSubmit={() => handleAddPlayer('W')}
+                onAddSubmit={(position) => handleAddPlayer('W', position)}
               />
             </DndContext>
           </div>

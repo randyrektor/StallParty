@@ -243,6 +243,11 @@ button {
 
 button:hover:not(:disabled) { filter: brightness(1.08); }
 button:active:not(:disabled) { filter: brightness(0.94); }
+
+.segmented-toggle button:hover:not(:disabled),
+.segmented-toggle button:active:not(:disabled) {
+  filter: none;
+}
 button:disabled { cursor: not-allowed; }
 
 input::placeholder {
@@ -1134,6 +1139,36 @@ input:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
+}
+
+button.player-seat-name {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: 0;
+  cursor: text;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.player-seat-name:hover,
+button.player-seat-name:active {
+  filter: none;
+}
+
+input.player-seat-name {
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: 0;
+  outline: none;
+  width: 100%;
+  border-radius: 0;
 }
 
 .player-seat-meta {

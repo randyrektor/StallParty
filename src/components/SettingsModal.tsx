@@ -283,6 +283,7 @@ export function SettingsModal({
             <div
               role="group"
               aria-label="Theme"
+              className="segmented-toggle"
               style={styles.themeSegmented}
             >
               <button
@@ -517,7 +518,7 @@ export function SettingsModal({
             </div>
             <div style={styles.cardContent}>
               {teamSpectatorLink && (
-                <div role="group" aria-label="Who is scanning" style={{ ...styles.themeSegmented, marginBottom: 12 }}>
+                <div role="group" aria-label="Who is scanning" className="segmented-toggle" style={{ ...styles.themeSegmented, marginBottom: 12 }}>
                   <button
                     type="button"
                     aria-pressed={spectatorAudience === 'opponents'}
@@ -692,8 +693,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   themeSegment: {
     appearance: 'none',
+    WebkitAppearance: 'none',
     border: 'none',
-    background: 'transparent',
+    // Longhand only. Clearing a shorthand leaves the native white button fill.
+    backgroundColor: 'transparent',
     color: COLORS.textSecondary,
     fontSize: '12px',
     fontWeight: 600,
