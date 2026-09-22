@@ -19,6 +19,74 @@ import { type GameClockTime } from '../utils/gameClock';
 import { SoftCapInput } from './SoftCapInput';
 import { GameClockInput } from './GameClockInput';
 
+/**
+ * Touch reorder on the roster row itself.
+ * A moving finger during the pause scrolls. After the pause, movement
+ * reorders. A still finger never picks the row up, so hold can open delete.
+ */
+let armedRosterTouch: RosterTouchSensor | null = null;
+
+class RosterTouchSensor extends TouchSensor {
+  armed = false;
+  origin: { x: number; y: number } | null = null;
+
+  constructor(props: ConstructorParameters<typeof TouchSensor>[0]) {
+    super(props);
+    const coords = (this as unknown as { initialCoordinates?: { x: number; y: number } }).initialCoordinates;
+    this.origin = coords ? { x: coords.x, y: coords.y } : null;
+    armedRosterTouch = this;
+  }
+
+  abort() {
+    if (armedRosterTouch === this) armedRosterTouch = null;
+    callParentSensor(this, 'handleCancel');
+  }
+}
+
+type SensorMethod = 'handleStart' | 'handleMove' | 'handleEnd' | 'handleCancel';
+
+function callParentSensor(sensor: RosterTouchSensor, method: SensorMethod, event?: Event) {
+  const parent = TouchSensor.prototype as unknown as Record<SensorMethod, (this: RosterTouchSensor, event?: Event) => void>;
+  parent[method].call(sensor, event);
+}
+
+Object.assign(RosterTouchSensor.prototype, {
+  handleStart(this: RosterTouchSensor) {
+    this.armed = true;
+  },
+  handleMove(this: RosterTouchSensor, event: Event) {
+    const activated = (this as unknown as { activated?: boolean }).activated;
+    if (activated || !this.armed) {
+      callParentSensor(this, 'handleMove', event);
+      return;
+    }
+    const point = pointFromTouchEvent(event);
+    if (!point || !this.origin) return;
+    if (Math.hypot(point.x - this.origin.x, point.y - this.origin.y) < 8) return;
+    callParentSensor(this, 'handleStart');
+    callParentSensor(this, 'handleMove', event);
+  },
+  handleEnd(this: RosterTouchSensor) {
+    if (armedRosterTouch === this) armedRosterTouch = null;
+    callParentSensor(this, 'handleEnd');
+  },
+  handleCancel(this: RosterTouchSensor) {
+    if (armedRosterTouch === this) armedRosterTouch = null;
+    callParentSensor(this, 'handleCancel');
+  },
+});
+
+function pointFromTouchEvent(event: Event): { x: number; y: number } | null {
+  const touchEvent = event as TouchEvent;
+  const touch = touchEvent.touches?.[0] ?? touchEvent.changedTouches?.[0];
+  if (!touch) return null;
+  return { x: touch.clientX, y: touch.clientY };
+}
+
+function cancelRosterTouchDrag() {
+  armedRosterTouch?.abort();
+}
+
 const COLORS = {
   background: THEME.bgPage,
   card: THEME.bgElevated,
@@ -158,25 +226,36 @@ function SortablePlayer({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: player.uuid });
   const longPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasMoved = useRef(false);
   const startPosition = useRef<{ x: number; y: number } | null>(null);
   const [jerseyText, setJerseyText] = useState(player.jersey != null ? String(player.jersey) : '');
   const [editingName, setEditingName] = useState(false);
   const [nameText, setNameText] = useState(player.name);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const cancelNameEdit = useRef(false);
+  const press = useRef({ moved: false, held: false });
 
   useEffect(() => {
     if (!editingName) setNameText(player.name);
   }, [player.name, editingName]);
 
-  useEffect(() => {
-    if (!editingName) return;
+  const placeCaretAtEnd = (input: HTMLInputElement) => {
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  };
+
+  const beginNameEdit = () => {
+    flushSync(() => {
+      setNameText(player.name);
+      setEditingName(true);
+    });
     const input = nameInputRef.current;
     if (!input) return;
     input.focus();
-    input.select();
-  }, [editingName]);
+    placeCaretAtEnd(input);
+    requestAnimationFrame(() => {
+      if (document.activeElement === input) placeCaretAtEnd(input);
+    });
+  };
 
   const commitName = () => {
     if (cancelNameEdit.current) {
@@ -206,49 +285,51 @@ function SortablePlayer({
     }
   };
 
-  // Handlers for long-press
-  const handlePointerDown = (e: React.PointerEvent | React.TouchEvent) => {
-    if (isEditMode) return;
-    
-    // Reset movement tracking
-    hasMoved.current = false;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    startPosition.current = { x: clientX, y: clientY };
-    
-    longPressTimeout.current = setTimeout(() => {
-      // Only trigger long-press if we haven't moved significantly
-      if (!hasMoved.current && onLongPress) {
-        onLongPress();
-      }
-    }, 800);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent | React.TouchEvent) => {
-    if (!startPosition.current || isEditMode) return;
-    
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    
-    const deltaX = Math.abs(clientX - startPosition.current.x);
-    const deltaY = Math.abs(clientY - startPosition.current.y);
-    
-    // If moved more than 10px in any direction, cancel long-press
-    if (deltaX > 10 || deltaY > 10) {
-      hasMoved.current = true;
-      if (longPressTimeout.current) {
-        clearTimeout(longPressTimeout.current);
-        longPressTimeout.current = null;
-      }
-    }
-  };
-
-  const handlePointerUp = () => {
+  const clearPressTimer = () => {
     if (longPressTimeout.current) {
       clearTimeout(longPressTimeout.current);
       longPressTimeout.current = null;
     }
+  };
+
+  // Hold still to open multi-delete. Movement cancels it so the gesture can scroll.
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (isEditMode || editingName) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('input, select, textarea, .player-seat-add-now')) return;
+
+    press.current = { moved: false, held: false };
+    startPosition.current = { x: e.clientX, y: e.clientY };
+
+    longPressTimeout.current = setTimeout(() => {
+      if (press.current.moved) return;
+      press.current.held = true;
+      cancelRosterTouchDrag();
+      window.getSelection()?.removeAllRanges();
+      onLongPress();
+    }, 500);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!startPosition.current || isEditMode) return;
+
+    const deltaX = Math.abs(e.clientX - startPosition.current.x);
+    const deltaY = Math.abs(e.clientY - startPosition.current.y);
+
+    if (deltaX > 8 || deltaY > 8) {
+      press.current.moved = true;
+      clearPressTimer();
+    }
+  };
+
+  const handlePointerUp = () => {
+    clearPressTimer();
     startPosition.current = null;
+  };
+
+  const handlePointerCancel = () => {
+    press.current.moved = true;
+    handlePointerUp();
   };
 
   return (
@@ -257,11 +338,8 @@ function SortablePlayer({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onTouchStart={handlePointerDown}
-      onTouchMove={handlePointerMove}
-      onTouchEnd={handlePointerUp}
-      onTouchCancel={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <span className="roster-index">
         {player.number > 0 ? player.number : index + 1}
@@ -286,6 +364,16 @@ function SortablePlayer({
               onTouchStart={stopSeatDrag}
               onClick={stopSeatDrag}
               onChange={(e) => setNameText(capitalizeNameInput(e.target.value))}
+              onSelect={(e) => {
+                const input = e.currentTarget;
+                if (
+                  input.value.length > 0 &&
+                  input.selectionStart === 0 &&
+                  input.selectionEnd === input.value.length
+                ) {
+                  placeCaretAtEnd(input);
+                }
+              }}
               onBlur={commitName}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -303,18 +391,13 @@ function SortablePlayer({
               type="button"
               className="player-seat-name"
               aria-label={`Edit ${player.name}`}
-              onPointerDown={stopSeatDrag}
-              onMouseDown={stopSeatDrag}
-              onTouchStart={stopSeatDrag}
               onClick={(e) => {
                 e.stopPropagation();
-                flushSync(() => {
-                  setNameText(player.name);
-                  setEditingName(true);
-                });
-                const input = nameInputRef.current;
-                input?.focus();
-                input?.select();
+                if (press.current.moved || press.current.held) {
+                  press.current = { moved: false, held: false };
+                  return;
+                }
+                beginNameEdit();
               }}
             >
               {player.name}
@@ -767,8 +850,8 @@ export function PlayerManagerWeb({
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    // Hold briefly before a touch drag so a scroll flick doesn't reorder.
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+    // Pause, then drag, to reorder the row. A flick during the pause scrolls.
+    useSensor(RosterTouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
 
   // List order = master rotation queue first (source of truth after subs), then roster-only extras (e.g. pending).

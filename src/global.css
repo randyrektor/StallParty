@@ -825,6 +825,9 @@ input:focus {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .roster-index {
@@ -1151,6 +1154,10 @@ button.player-seat-name {
   letter-spacing: inherit;
   padding: 0;
   cursor: text;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1169,6 +1176,8 @@ input.player-seat-name {
   outline: none;
   width: 100%;
   border-radius: 0;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .player-seat-meta {
