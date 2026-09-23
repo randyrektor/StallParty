@@ -1359,10 +1359,20 @@ input.player-seat-name {
 .player-seat-add-plus {
   position: relative;
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: none;
   border-radius: 50%;
   color: var(--text-on-accent);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.player-seat-add-plus:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 
 .player-seat-add-plus::before,

@@ -641,13 +641,28 @@ function AddGhostRow({
   onSubmit: (position?: PlayerPosition) => void;
 }) {
   const genderLabel = gender === 'O' ? 'Open' : 'Women';
+  const trimmed = value.trim();
   return (
     <div className="roster-row">
       <span className="roster-index">{nextNumber}</span>
-      <label
+      <div
         className={`player-seat player-seat-add player-seat--${gender === 'O' ? 'open' : 'women'}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) inputRef.current?.focus();
+        }}
       >
-        <span className="player-seat-add-plus" aria-hidden />
+        <button
+          type="button"
+          className="player-seat-add-plus"
+          aria-label={trimmed ? `Add ${trimmed}` : `Add ${genderLabel.toLowerCase()} player`}
+          onClick={() => {
+            if (!trimmed) {
+              inputRef.current?.focus();
+              return;
+            }
+            onSubmit();
+          }}
+        />
         <input
           ref={inputRef}
           className="player-seat-add-name"
@@ -682,7 +697,7 @@ function AddGhostRow({
             ariaLabel={`${genderLabel} position`}
           />
         </span>
-      </label>
+      </div>
     </div>
   );
 }
