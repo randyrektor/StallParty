@@ -433,6 +433,10 @@ input:focus {
   padding-top: max(16px, env(safe-area-inset-top, 0px));
 }
 
+.app-shell--no-header .app-shell-body--center {
+  padding-top: max(48px, env(safe-area-inset-top, 0px));
+}
+
 .kickoff-footer {
   width: 100%;
   margin-top: 20px;
@@ -973,7 +977,8 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
+  /* The card shadow is wider than this column. Clipping here cuts the sides off. */
+  overflow: visible;
   min-height: 0;
   padding: 48px 28px;
   padding-top: max(48px, env(safe-area-inset-top, 0px));
@@ -2107,10 +2112,16 @@ input.player-seat-name {
   }
 
   .app-shell-body--center {
-    padding: 24px 16px;
+    padding: 24px 48px 68px;
     padding-top: max(24px, env(safe-area-inset-top, 0px));
-    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+    padding-right: max(48px, env(safe-area-inset-right, 0px));
+    padding-bottom: max(68px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(48px, env(safe-area-inset-left, 0px));
     align-items: flex-start;
+  }
+
+  .app-shell--no-header .app-shell-body--center {
+    padding-top: max(24px, env(safe-area-inset-top, 0px));
   }
 
   .shell-card {
