@@ -184,8 +184,8 @@ html, body, #root {
   width: 100%;
   max-width: 100%;
   height: 100%;
-  height: 100lvh;
-  max-height: 100lvh;
+  height: var(--app-height, 100lvh);
+  max-height: var(--app-height, 100lvh);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-optical-sizing: auto;
@@ -194,8 +194,8 @@ html, body, #root {
 html, body {
   background: var(--bg-page) !important;
   width: 100%;
-  height: 100lvh;
-  max-height: 100lvh;
+  height: var(--app-height, 100lvh);
+  max-height: var(--app-height, 100lvh);
   overflow: hidden;
 }
 
@@ -211,8 +211,8 @@ html, body {
 #root {
   overflow-x: hidden;
   height: 100%;
-  height: 100lvh;
-  max-height: 100lvh;
+  height: var(--app-height, 100lvh);
+  max-height: var(--app-height, 100lvh);
 }
 
 .flex-container { min-width: 0; max-width: 100%; }
@@ -279,12 +279,16 @@ input:focus {
   --blob-grain-opacity: 0.08;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  height: 100lvh;
-  max-height: 100lvh;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: 100%;
+  height: var(--app-height, 100lvh);
+  max-height: var(--app-height, 100lvh);
   max-width: 100%;
   overflow: hidden;
-  position: relative;
   isolation: isolate;
   background-color: var(--bg-app);
   background-image:
@@ -1765,7 +1769,7 @@ input.player-seat-name {
   display: flex;
   flex-direction: column;
   gap: 0;
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -1970,7 +1974,7 @@ input.player-seat-name {
   width: 100%;
   flex-wrap: nowrap;
   gap: 16px;
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -2110,6 +2114,22 @@ input.player-seat-name {
     padding-left: max(12px, env(safe-area-inset-left, 0px));
     padding-right: max(12px, env(safe-area-inset-right, 0px));
     padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-shell-body:has(.scoreboard) {
+    padding-right: 0;
+    padding-bottom: 0;
+  }
+
+  .scoreboard > .score-top-bar,
+  .scoreboard > .line-info,
+  .scoreboard > .clock-reminder,
+  .scoreboard > .goal-tag {
+    margin-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  .scoreboard > .goal-tag {
+    margin-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   }
 
   .app-shell-body--center {
@@ -2262,6 +2282,12 @@ input.player-seat-name {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .scoreboard:has(.goal-tag) .line-display {
+    padding-bottom: 8px;
   }
 
   .line-section {
