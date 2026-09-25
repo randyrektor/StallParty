@@ -272,7 +272,6 @@ export function ScoreBoard({
 
   return (
     <AppShell
-      title={team1Name}
       onHome={onHome}
       left={
         gameStarted ? (

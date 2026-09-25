@@ -37,7 +37,7 @@ export function AppShell({
   return (
     <div className={`app-shell${showHeader ? '' : ' app-shell--no-header'}`}>
       {showHeader && (
-        <header className="app-shell-header">
+        <header className={`app-shell-header${title ? '' : ' app-shell-header--untitled'}`}>
           <div className={headerInner}>
             <div className="app-shell-side">
               {onHome && (
@@ -48,7 +48,7 @@ export function AppShell({
               )}
               {left}
             </div>
-            <h1 className="app-shell-title">{title}</h1>
+            {title ? <h1 className="app-shell-title">{title}</h1> : null}
             <div className="app-shell-side app-shell-side--end">{right}</div>
           </div>
         </header>

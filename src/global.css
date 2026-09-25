@@ -2081,6 +2081,10 @@ input.player-seat-name {
     padding-bottom: 8px;
   }
 
+  .app-shell-header--untitled .app-shell-inner {
+    grid-template-areas: "left right";
+  }
+
   .app-shell-side {
     flex-wrap: nowrap;
     gap: 6px;
