@@ -88,6 +88,19 @@ export default {
     if (url.pathname === '/sitemap.xml/' || url.pathname === '/sitemap.txt/') {
       return Response.redirect(`${url.origin}${url.pathname.slice(0, -1)}`, 301);
     }
+    if (url.pathname === '/sw.js' && env.ASSETS) {
+      const asset = await env.ASSETS.fetch(request);
+      const headers = new Headers(asset.headers);
+      headers.set('Cache-Control', 'no-cache');
+      headers.set('Service-Worker-Allowed', '/');
+      return withSecurityHeaders(
+        new Response(asset.body, {
+          status: asset.status,
+          statusText: asset.statusText,
+          headers,
+        })
+      );
+    }
     if (url.pathname === '/robots.txt') return crawlFile(ROBOTS_TXT, 'text/plain; charset=utf-8');
     if (url.pathname === '/sitemap.xml') return crawlFile(SITEMAP_XML, 'text/xml; charset=utf-8');
     if (url.pathname === '/sitemap.txt') return crawlFile(SITEMAP_TXT, 'text/plain; charset=utf-8');

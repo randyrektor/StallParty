@@ -43,6 +43,7 @@ import { ArchiveGameScreen } from './src/components/ArchiveGameScreen';
 import { buildSpectatorSnapshot } from './src/utils/spectatorState';
 import { isSoftCapReached, parseSoftCap, type SoftPointCap } from './src/utils/softCap';
 import { parseGameClockTime, type GameClockTime } from './src/utils/gameClock';
+import { useWakeLock } from './src/hooks/useWakeLock';
 import { SpectatorScreen } from './src/components/SpectatorScreen';
 import {
   mintRoomId,
@@ -631,6 +632,7 @@ export default function App() {
   );
 
   const viewingRoomId = watchHash?.kind === 'room' ? watchHash.roomId : null;
+  useWakeLock(!showHomeScreen && !viewingRoomId && watchHash?.kind !== 'snapshot');
   const viewingViewKey =
     watchHash?.kind === 'room' && watchHash.view === 'team' ? (watchHash.viewKey ?? null) : null;
   const viewingAsTeam = viewingViewKey != null;
@@ -971,6 +973,10 @@ export default function App() {
       .filter((player) => newRosterIds.has(player.uuid))
       .map((player) => rosterById.get(player.uuid) ?? player);
     setPendingPlayers(stillPending);
+  };
+
+  const handleRemoveFromGame = (player: Player) => {
+    onRosterChange(roster.filter((candidate) => candidate.uuid !== player.uuid));
   };
 
   const handleLateArrival = (player: Player) => {
@@ -1329,14 +1335,15 @@ export default function App() {
           gameStarted={gameStarted}
           onKickoff={handleKickoff}
           onHalfPull={handleHalfPull}
-          halfActive={halfPoint === pointNumber && halfPull != null}
           halfChosen={halfPoint != null && halfPull != null}
           halfChoice={halfPoint === pointNumber ? halfPull : null}
           suggestedHalfPull={openingPull === 1 ? 2 : openingPull === 2 ? 1 : null}
           onSubstitute={handleSubstitute}
-          pullLabel={
-            pullLabel && halfPoint === pointNumber && halfPull ? `Half · ${pullLabel}` : pullLabel
-          }
+          onRemoveFromGame={handleRemoveFromGame}
+          pullLabel={pullLabel}
+          pullSide={currentPull}
+          theme={theme}
+          onThemeChange={setTheme}
           tagStrip={tagStrip}
           onTagPlayer={handleTagGoal}
           onDismissTag={handleDismissTag}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Player, type LineupSize, type SplitCycle } from '../types';
+import { Player, type LineupSize, type SplitCycle, type Theme } from '../types';
 import { getGenderPattern, isSplitCycleAvailable } from '../utils/rotationHelpers';
 import { getLineSeats } from '../utils/lineRotation';
 import { formatSoftCapBadge, isSoftCapReached, type SoftPointCap } from '../utils/softCap';
@@ -13,6 +13,43 @@ import { GenderCyclePills } from './GenderCyclePills';
 import { THEME } from '../constants';
 import { AppShell } from './AppShell';
 import { PlayerSeat } from './PlayerSeat';
+
+function SunIcon() {
+  return (
+    <svg className="btn-icon-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.1 5.1l1.6 1.6M17.3 17.3l1.6 1.6M18.9 5.1l-1.6 1.6M6.7 17.3l-1.6 1.6"
+      />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg className="btn-icon-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M14.5 2.4a8.8 8.8 0 1 0 7.1 12.2A7.2 7.2 0 0 1 14.5 2.4Z"
+      />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg className="btn-icon-glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M19.4 13.5a7.7 7.7 0 0 0 .1-1.5 7.7 7.7 0 0 0-.1-1.5l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-2.6-1.5l-.4-2.6h-4l-.4 2.6a7.4 7.4 0 0 0-2.6 1.5l-2.4-1-2 3.4 2 1.6a7.7 7.7 0 0 0-.1 1.5 7.7 7.7 0 0 0 .1 1.5l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a7.4 7.4 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.6ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"
+      />
+    </svg>
+  );
+}
 
 const COLORS = {
   background: THEME.bgApp,
@@ -69,8 +106,7 @@ interface ScoreBoardProps {
   gameStarted?: boolean;
   onKickoff?: (pulling: 1 | 2) => void;
   onHalfPull?: (pulling: 1 | 2) => void;
-  halfActive?: boolean;
-  /** A team has been chosen for half, so the button stays closed. */
+  /** Halftime has been chosen, so the header button is gone. */
   halfChosen?: boolean;
   /** Who is already set to pull this point at half, if the captain chose. The modal shows the other team as receiving. */
   halfChoice?: 1 | 2 | null;
@@ -79,7 +115,11 @@ interface ScoreBoardProps {
   onBackToSetup?: () => void;
   onHome?: () => void;
   onSubstitute?: (outPlayer: Player, inPlayer: Player) => void;
+  onRemoveFromGame?: (player: Player) => void;
   pullLabel?: string | null;
+  pullSide?: 1 | 2 | null;
+  theme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
   tagStrip?: {
     pointNumber: number;
     players: Player[];
@@ -120,20 +160,24 @@ export function ScoreBoard({
   gameStarted = true,
   onKickoff,
   onHalfPull,
-  halfActive = false,
   halfChosen = false,
   halfChoice = null,
   suggestedHalfPull = null,
   onBackToSetup,
   onHome,
   onSubstitute,
+  onRemoveFromGame,
   pullLabel = null,
+  pullSide = null,
+  theme = 'dark',
+  onThemeChange,
   tagStrip = null,
   onTagPlayer,
   onDismissTag,
   onEndGame,
 }: ScoreBoardProps) {
   const [subOut, setSubOut] = useState<Player | null>(null);
+  const [confirmOut, setConfirmOut] = useState(false);
   const [halfOpen, setHalfOpen] = useState(false);
   const [dismissedReminder, setDismissedReminder] = useState('');
   const [capPromptDismissed, setCapPromptDismissed] = useState(false);
@@ -177,7 +221,10 @@ export function ScoreBoard({
       })()
     : [];
 
-  const closeSubPicker = useCallback(() => setSubOut(null), []);
+  const closeSubPicker = useCallback(() => {
+    setSubOut(null);
+    setConfirmOut(false);
+  }, []);
 
   useEffect(() => {
     if (!capReached) setCapPromptDismissed(false);
@@ -200,6 +247,17 @@ export function ScoreBoard({
     }
     setSubOut(null);
   };
+
+  const tagChoosingThrower = Boolean(tagStrip?.scorerId) && !tagStrip?.throwerId;
+  const tagFinished = Boolean(tagStrip?.scorerId && tagStrip?.throwerId);
+  const tagScorer = tagStrip?.players.find((player) => player.uuid === tagStrip.scorerId);
+  const tagNames = (tagStrip?.players ?? []).filter((player) => {
+    if (tagChoosingThrower && player.uuid === tagStrip?.scorerId) return false;
+    if (tagFinished && player.uuid !== tagStrip?.scorerId && player.uuid !== tagStrip?.throwerId) {
+      return false;
+    }
+    return true;
+  });
 
   const handleScoreClick = (team: 'team1' | 'team2') => {
     if (!gameStarted || capReached) return;
@@ -237,18 +295,11 @@ export function ScoreBoard({
                 'Roster'
               )}
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              aria-pressed={halfActive || halfChosen}
-              disabled={halfChosen}
-              style={halfChosen ? { opacity: 0.45 } : undefined}
-              onClick={() => {
-                if (!halfChosen) setHalfOpen(true);
-              }}
-            >
-              Halftime
-            </button>
+            {!halfChosen && (
+              <button type="button" className="btn btn-ghost" onClick={() => setHalfOpen(true)}>
+                Halftime
+              </button>
+            )}
           </>
         ) : (
           <button type="button" className="btn btn-ghost" onClick={onBackToSetup}>
@@ -257,9 +308,26 @@ export function ScoreBoard({
         )
       }
       right={
-        <button className="btn btn-ghost" onClick={() => setSettingsVisible(true)}>
-          Settings
-        </button>
+        <>
+          {onThemeChange && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon"
+              aria-label={theme === 'light' ? 'Switch to dark' : 'Switch to light'}
+              onClick={() => onThemeChange(theme === 'light' ? 'dark' : 'light')}
+            >
+              {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            aria-label="Settings"
+            onClick={() => setSettingsVisible(true)}
+          >
+            <GearIcon />
+          </button>
+        </>
       }
     >
     <div className="scoreboard">
@@ -414,7 +482,11 @@ export function ScoreBoard({
         <div className="line-info-row">
           <div className="line-info-point">
             <span>Point {pointNumber}</span>
-            {pullLabel && <span className="line-info-pull">{pullLabel}</span>}
+            {pullLabel && (
+              <span className={`line-info-pull${pullSide === 1 ? ' is-us' : pullSide === 2 ? ' is-them' : ''}`}>
+                {pullLabel}
+              </span>
+            )}
             {softCap != null && (
               <span className={`line-info-cap${capReached ? ' is-reached' : ''}`}>
                 {formatSoftCapBadge(softCap, capReached)}
@@ -429,6 +501,11 @@ export function ScoreBoard({
       {clockReminder && reminderKey !== dismissedReminder && (
         <div className={`clock-reminder${clockReminder.phase === 'now' ? ' clock-reminder--now' : ''}`}>
           <p className="clock-reminder-copy">{clockReminderCopy(clockReminder)}</p>
+          {clockReminder.kind === 'half' && !halfChosen && (
+            <button type="button" className="btn btn-primary clock-reminder-half" onClick={() => setHalfOpen(true)}>
+              Halftime
+            </button>
+          )}
           <button
             type="button"
             className="clock-reminder-dismiss"
@@ -438,17 +515,84 @@ export function ScoreBoard({
           </button>
         </div>
       )}
+      <div className="line-display">
+        <div className="line-section line-section--current">
+          <h3 className="line-title">Current Line</h3>
+          <div className="player-list">
+            {currentSeats.map((seat, i) => (
+              <div
+                key={`current-${i}`}
+                className="player-seat-row"
+              >
+                {seat.kind === 'player' ? (
+                  <PlayerSeat
+                    gender={seat.player.gender}
+                    name={seat.player.name}
+                    jersey={seat.player.jersey}
+                    position={seat.player.position}
+                  />
+                ) : (
+                  <PlayerSeat gender={seat.gender} empty />
+                )}
+                {onSubstitute && gameStarted ? (
+                  seat.kind === 'player' ? (
+                    <button
+                      type="button"
+                      className="btn btn-sub"
+                      onClick={() => {
+                        setConfirmOut(false);
+                        setSubOut(seat.player);
+                      }}
+                      aria-label={`Substitute ${seat.player.name}`}
+                    >
+                      Sub
+                    </button>
+                  ) : (
+                    <span className="sub-spacer" />
+                  )
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="line-section line-section--next">
+          <h3 className="line-title">Next Line</h3>
+          <div className="player-list">
+            {nextSeats.map((seat, i) =>
+              seat.kind === 'player' ? (
+                <PlayerSeat
+                  key={`next-${i}`}
+                  gender={seat.player.gender}
+                  name={seat.player.name}
+                  jersey={seat.player.jersey}
+                  position={seat.player.position}
+                  tone="next"
+                />
+              ) : (
+                <PlayerSeat key={`next-${i}`} gender={seat.gender} empty tone="next" />
+              )
+            )}
+          </div>
+        </div>
+      </div>
       {tagStrip && onTagPlayer && (
         <div className="goal-tag" role="group" aria-label={`Tag point ${tagStrip.pointNumber}`}>
-          <div className="goal-tag-head">
-            <span>Point {tagStrip.pointNumber}</span>
-            <span className="goal-tag-hint">Tap scorer, then thrower</span>
-            <button type="button" className="btn btn-ghost goal-tag-done" onClick={onDismissTag}>
-              Done
+          <p className="goal-tag-ask">
+            {!tagStrip.scorerId ? 'Who scored?' : !tagStrip.throwerId ? 'Who threw it?' : 'Tagged'}
+          </p>
+          {tagChoosingThrower && tagScorer && (
+            <button
+              type="button"
+              className="goal-tag-name is-tagged goal-tag-scorer"
+              onClick={() => onTagPlayer(tagScorer.uuid)}
+              aria-label={`${tagScorer.name} scored. Tap to change.`}
+            >
+              <span>{tagScorer.name}</span>
+              <span className="goal-tag-role">Score</span>
             </button>
-          </div>
+          )}
           <div className="goal-tag-names">
-            {tagStrip.players.map((player) => {
+            {tagNames.map((player) => {
               const role =
                 player.uuid === tagStrip.scorerId
                   ? 'Score'
@@ -468,62 +612,11 @@ export function ScoreBoard({
               );
             })}
           </div>
+          <button type="button" className="btn btn-ghost goal-tag-done" onClick={onDismissTag}>
+            Done
+          </button>
         </div>
       )}
-      <div className="line-display">
-        <div className="line-section">
-          <h3 className="line-title">Current Line</h3>
-          <div className="player-list">
-            {currentSeats.map((seat, i) => (
-              <div
-                key={`current-${i}`}
-                className="player-seat-row"
-              >
-                {seat.kind === 'player' ? (
-                  <PlayerSeat
-                    gender={seat.player.gender}
-                    name={seat.player.name}
-                    position={seat.player.position}
-                  />
-                ) : (
-                  <PlayerSeat gender={seat.gender} empty />
-                )}
-                {onSubstitute && gameStarted ? (
-                  seat.kind === 'player' ? (
-                    <button
-                      type="button"
-                      className="btn btn-sub"
-                      onClick={() => setSubOut(seat.player)}
-                      aria-label={`Substitute ${seat.player.name}`}
-                    >
-                      Sub
-                    </button>
-                  ) : (
-                    <span className="sub-spacer" />
-                  )
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="line-section">
-          <h3 className="line-title">Next Line</h3>
-          <div className="player-list">
-            {nextSeats.map((seat, i) =>
-              seat.kind === 'player' ? (
-                <PlayerSeat
-                  key={`next-${i}`}
-                  gender={seat.player.gender}
-                  name={seat.player.name}
-                  tone="next"
-                />
-              ) : (
-                <PlayerSeat key={`next-${i}`} gender={seat.gender} empty />
-              )
-            )}
-          </div>
-        </div>
-      </div>
 
       {subOut && onSubstitute && (
         <div style={styles.subOverlay} onClick={closeSubPicker} role="presentation">
@@ -535,21 +628,11 @@ export function ScoreBoard({
             aria-labelledby="sub-modal-title"
           >
             <h4 id="sub-modal-title" style={styles.subModalTitle}>
-              Sub out: {subOut.name}
+              Sub for {subOut.name}
             </h4>
-            <p style={styles.subModalHelp}>
-              Bench for field (tired / fresh): you swap numbers with {subOut.name} in the
-              rotation list—same pointer, two people trade spots. Someone not in the list yet
-              takes this slot and {subOut.name} goes to the end. Injury or leaving the game:
-              remove them from the roster instead; their slot is deleted and everyone below moves
-              up.
-            </p>
-            <div style={styles.subCandidateList}>
+            <div className="sub-candidate-list" style={styles.subCandidateList}>
               {subCandidates.length === 0 ? (
-                <p style={styles.subModalEmpty}>
-                  No eligible subs: every {subOut.gender === 'O' ? 'open' : "women's"}-matching player
-                  is already on this line. Add bench players from the roster panel or cancel.
-                </p>
+                <p style={styles.subModalEmpty}>No one on the bench.</p>
               ) : (
                 subCandidates.map((p) => (
                   <button
@@ -566,6 +649,22 @@ export function ScoreBoard({
                 ))
               )}
             </div>
+            {onRemoveFromGame && (
+              <button
+                type="button"
+                className="sub-out-day"
+                onClick={() => {
+                  if (!confirmOut) {
+                    setConfirmOut(true);
+                    return;
+                  }
+                  onRemoveFromGame(subOut);
+                  closeSubPicker();
+                }}
+              >
+                {confirmOut ? `Remove ${subOut.name}` : 'Out for the day'}
+              </button>
+            )}
             <button type="button" style={styles.subCancelButton} onClick={closeSubPicker}>
               Cancel
             </button>
@@ -808,16 +907,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
-    maxHeight: 'min(50vh, 280px)',
-    overflowY: 'auto',
   },
   subCandidateButton: {
     border: 'none',
     borderRadius: 'var(--sub-modal-inner-radius)',
-    padding: '12px 14px',
+    padding: '14px 16px',
+    minHeight: '52px',
     color: THEME.textOnAccent,
-    fontSize: '15px',
-    fontWeight: 600,
+    fontSize: '18px',
+    fontWeight: 700,
     cursor: 'pointer',
     textAlign: 'center',
   },
