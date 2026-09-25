@@ -1162,10 +1162,6 @@ input:focus {
   background: color-mix(in srgb, var(--accent-women) 52%, #000 48%);
 }
 
-.player-seat--next .player-seat-name {
-  color: rgba(255, 255, 255, 0.88);
-}
-
 .player-seat--pending {
   outline: 2px dashed rgba(255, 255, 255, 0.65);
   outline-offset: -3px;
@@ -1503,9 +1499,6 @@ input.player-seat-name {
 [data-theme='light'] .player-seat--next.player-seat--women {
   background: color-mix(in srgb, var(--accent-women) 42%, #fff 58%);
   color: var(--accent-women);
-}
-[data-theme='light'] .player-seat--next .player-seat-name {
-  color: inherit;
 }
 
 [data-theme='light'] .player-seat--empty.player-seat--open,
@@ -2002,27 +1995,13 @@ input.player-seat-name {
   color: var(--text);
 }
 
-.line-section--next .line-title {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
 .line-section--next .player-seat {
   flex: 0 0 auto;
   width: 100%;
-  font-size: 18px;
 }
 
 .line-section .player-list {
   flex: 0 0 auto;
-}
-
-.line-section--next .player-seat-jersey {
-  font-size: 16px;
-  opacity: 1;
 }
 
 .player-list {
@@ -2294,17 +2273,6 @@ input.player-seat-name {
     flex: 0 0 auto;
     align-self: stretch;
     width: 100%;
-  }
-
-  .line-section--next .player-seat {
-    min-height: 44px;
-    font-size: 18px;
-  }
-
-  .line-section--current .player-seat {
-    min-height: 40px;
-    padding-top: 4px;
-    padding-bottom: 4px;
   }
 
   .player-list {
