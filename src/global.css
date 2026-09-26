@@ -280,7 +280,7 @@ input:focus {
   display: flex;
   flex-direction: column;
   position: fixed;
-  top: 0;
+  top: var(--app-offset, 0px);
   right: 0;
   bottom: auto;
   left: 0;
