@@ -47,8 +47,6 @@ function measureLargeHeight(doc: Document): number {
 }
 
 export function bindViewportHeight(win: Window = window): () => void {
-  let scheduled = 0;
-
   const apply = () => {
     const box = readViewportBox(
       win.visualViewport,
@@ -59,15 +57,6 @@ export function bindViewportHeight(win: Window = window): () => void {
     const root = win.document.documentElement;
     root.style.setProperty('--app-height', `${box.height}px`);
     root.style.setProperty('--app-offset', `${box.offsetTop}px`);
-    if (box.offsetTop > 0 && isTypingElement(win.document.activeElement)) {
-      const active = win.document.activeElement;
-      if (active instanceof HTMLElement) {
-        win.cancelAnimationFrame(scheduled);
-        scheduled = win.requestAnimationFrame(() => {
-          active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-        });
-      }
-    }
   };
 
   apply();
@@ -77,7 +66,6 @@ export function bindViewportHeight(win: Window = window): () => void {
   win.visualViewport?.addEventListener('resize', apply);
   win.visualViewport?.addEventListener('scroll', apply);
   return () => {
-    win.cancelAnimationFrame(scheduled);
     win.removeEventListener('resize', apply);
     win.removeEventListener('focusin', apply);
     win.removeEventListener('focusout', apply);
