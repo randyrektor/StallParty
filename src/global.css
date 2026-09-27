@@ -978,7 +978,6 @@ input:focus {
 .kickoff-column {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
 }
 
 /* Stay at the top of the phone. A focused control can pan the visual
@@ -989,20 +988,6 @@ input:focus {
     height: 100lvh;
     max-height: 100lvh;
   }
-}
-
-.kickoff-column > .roster-sheet {
-  /* Fill the screen when the list is short, but stay as tall as the
-     list so the shell scrolls instead of this sheet. */
-  flex: 1 0 auto;
-}
-
-.kickoff-column > .kickoff-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  flex: 0 0 auto;
-  margin-top: 12px;
 }
 
 .confirm-overlay {
