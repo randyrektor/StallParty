@@ -10,26 +10,28 @@ import {
 import { deleteRosterForTeam } from '../utils/rosterStorage';
 import { capitalizeNameInput } from '../utils/capitalizeName';
 
+interface HomeGame {
+  id: string;
+  title: string;
+  teams: string;
+  score: string;
+  ended?: boolean;
+}
+
 interface HomeScreenProps {
   onStart: (teamName: string) => void;
   onResume?: () => void;
-  resumeLabel?: string | null;
+  resumeGame?: { teams: string; score: string } | null;
   onForgetTeam?: (teamName: string) => void;
-  archivedGames?: { id: string; title: string; teams: string; score: string; ended?: boolean }[];
+  archivedGames?: HomeGame[];
   onContinueGame?: (id: string) => void;
   onForgetGame?: (id: string) => void;
+  pastOpen?: boolean;
+  onOpenPast?: () => void;
+  onClosePast?: () => void;
 }
 
 const HOLD_MS = 600;
-const VISIBLE_GAMES = 6;
-
-function fitVisibleGames(list: HTMLDivElement) {
-  const row = list.querySelector('button');
-  if (!row) return;
-  const gap = Number.parseFloat(getComputedStyle(list).rowGap) || 0;
-  const height = row.getBoundingClientRect().height;
-  list.style.maxHeight = `${Math.ceil(VISIBLE_GAMES * height + (VISIBLE_GAMES - 1) * gap)}px`;
-}
 
 function HoldButton({
   className,
@@ -104,34 +106,22 @@ function HoldButton({
 export function HomeScreen({
   onStart,
   onResume,
-  resumeLabel,
+  resumeGame,
   onForgetTeam,
   archivedGames = [],
   onContinueGame,
   onForgetGame,
+  pastOpen = false,
+  onOpenPast,
+  onClosePast,
 }: HomeScreenProps) {
   const [teamName, setTeamName] = useState('');
   const [savedTeams, setSavedTeams] = useState<string[]>([]);
-  const gameListRef = useRef<HTMLDivElement>(null);
+  const [startingNew, setStartingNew] = useState(false);
 
   useEffect(() => {
     setSavedTeams(loadRecentTeams());
   }, []);
-
-  useEffect(() => {
-    const list = gameListRef.current;
-    if (!list) return;
-    const fit = () => fitVisibleGames(list);
-    fit();
-    const observer = new ResizeObserver(fit);
-    const row = list.querySelector('button');
-    if (row) observer.observe(row);
-    window.addEventListener('resize', fit);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', fit);
-    };
-  }, [archivedGames]);
 
   const handleStart = () => {
     if (!teamName.trim()) {
@@ -166,125 +156,176 @@ export function HomeScreen({
     }
   };
 
-  const resumeOpen = Boolean(onResume && resumeLabel);
-  const featuredGame = resumeOpen ? null : (archivedGames.find((game) => !game.ended) ?? null);
-  const listedGames = featuredGame
-    ? archivedGames.filter((game) => game.id !== featuredGame.id)
-    : archivedGames;
-  const hasOpenGame = resumeOpen || archivedGames.some((game) => !game.ended);
+  const endedGames = archivedGames.filter((game) => game.ended);
+  const openActions: { key: string; label: string; score: string; onClick: () => void }[] = [];
+  if (onResume && resumeGame) {
+    openActions.push({
+      key: 'resume',
+      label: `Continue ${resumeGame.teams}`,
+      score: resumeGame.score,
+      onClick: onResume,
+    });
+  }
+  for (const game of archivedGames) {
+    if (game.ended) continue;
+    openActions.push({
+      key: game.id,
+      label: `Continue ${game.teams}`,
+      score: game.score,
+      onClick: () => onContinueGame?.(game.id),
+    });
+  }
+  const hasOpenGame = openActions.length > 0;
+  const showSetup = !hasOpenGame || startingNew;
+
+  const cancelNewGame = () => {
+    setStartingNew(false);
+    setTeamName('');
+  };
+
+  if (pastOpen) {
+    return (
+      <AppShell
+        title="Past games"
+        width="narrow"
+        left={
+          <button type="button" className="btn btn-ghost" onClick={onClosePast}>
+            ← Back
+          </button>
+        }
+      >
+        {endedGames.length === 0 ? (
+          <p className="home-empty">No past games</p>
+        ) : (
+          <>
+            <p className="home-hold-note">Hold to remove</p>
+            <div className="home-past-list">
+              {endedGames.map((game) => (
+                <HoldButton
+                  key={game.id}
+                  className="recent-team archive-game"
+                  onPress={() => onContinueGame?.(game.id)}
+                  onHold={() => {
+                    if (window.confirm(`Delete ${game.title}?`)) {
+                      onForgetGame?.(game.id);
+                    }
+                  }}
+                >
+                  <span>{game.title}</span>
+                  <span className="archive-game-score">{game.score}</span>
+                </HoldButton>
+              ))}
+            </div>
+          </>
+        )}
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell showHeader={false} width="narrow" center>
       <div className="shell-card home-card">
-          <div className="home-card-body">
+        <div className="home-card-body">
           <h1 className="home-title" style={styles.title}>{APP_NAME}</h1>
           <p style={styles.subtitle}>Ultimate frisbee scorekeeper</p>
-          
-          <div style={styles.inputSection}>
-            <label style={styles.label}>Your Team Name</label>
-            <input
-              type="text"
-              value={teamName}
-              autoCapitalize="words"
-              autoCorrect="off"
-              spellCheck={false}
-              onChange={(e) => setTeamName(capitalizeNameInput(e.target.value))}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter your team name"
-              style={styles.input}
-              autoFocus
-            />
-          </div>
 
-          {savedTeams.length > 0 && (
-            <div style={styles.savedTeamsSection}>
-              <label style={styles.label}>
-                Recent Teams
-                <span className="home-hold-hint">Hold to remove</span>
-              </label>
-              <div style={styles.teamList}>
-                {savedTeams.map((team) => (
-                  <HoldButton
-                    key={team}
-                    className={`recent-team${teamName === team ? ' is-selected' : ''}`}
-                    onPress={() => handleSelectTeam(team)}
-                    onHold={() => {
-                      if (window.confirm(`Remove ${team} from recent teams?`)) {
-                        handleRemoveTeam(team);
-                      }
-                    }}
-                  >
-                    {team}
-                  </HoldButton>
-                ))}
-              </div>
+          {hasOpenGame && (
+            <div className="home-open-list">
+              {openActions.map((action, index) => (
+                <button
+                  key={action.key}
+                  type="button"
+                  className={
+                    index === 0
+                      ? 'btn btn-primary home-continue'
+                      : 'btn home-continue home-continue-secondary'
+                  }
+                  onClick={action.onClick}
+                >
+                  <span className="home-continue-label">{action.label}</span>
+                  <span className="home-continue-score">{action.score}</span>
+                </button>
+              ))}
             </div>
           )}
 
-          {listedGames.length > 0 && (
-            <div style={styles.savedTeamsSection}>
-              <label style={styles.label}>
-                Games
-                <span className="home-hold-hint">Hold to remove</span>
-              </label>
-              <div ref={gameListRef} className="home-game-list" style={styles.teamList}>
-                {listedGames.map((game) => (
-                  <HoldButton
-                    key={game.id}
-                    className="recent-team archive-game"
-                    onPress={() => onContinueGame?.(game.id)}
-                    onHold={() => {
-                      if (window.confirm(`Delete ${game.title}?`)) {
-                        onForgetGame?.(game.id);
-                      }
-                    }}
-                  >
-                    <span>{game.ended ? game.title : `Continue ${game.teams}`}</span>
-                    <span className="archive-game-score">{game.score}</span>
-                  </HoldButton>
-                ))}
+          {showSetup && (
+            <div className={hasOpenGame ? 'home-setup home-setup--follow' : 'home-setup'}>
+              <div style={styles.inputSection}>
+                <label style={styles.label}>Team name</label>
+                <input
+                  type="text"
+                  value={teamName}
+                  autoCapitalize="words"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  onChange={(e) => setTeamName(capitalizeNameInput(e.target.value))}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Enter your team name"
+                  style={styles.input}
+                  autoFocus={hasOpenGame}
+                />
               </div>
+
+              {savedTeams.length > 0 && (
+                <div style={styles.savedTeamsSection}>
+                  <label style={styles.label}>
+                    Recent Teams
+                    <span className="home-hold-hint">Hold to remove</span>
+                  </label>
+                  <div style={styles.teamList}>
+                    {savedTeams.map((team) => (
+                      <HoldButton
+                        key={team}
+                        className={`recent-team${teamName === team ? ' is-selected' : ''}`}
+                        onPress={() => handleSelectTeam(team)}
+                        onHold={() => {
+                          if (window.confirm(`Remove ${team} from recent teams?`)) {
+                            handleRemoveTeam(team);
+                          }
+                        }}
+                      >
+                        {team}
+                      </HoldButton>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          </div>
+        </div>
 
-          <div className="home-actions">
-            {onResume && resumeLabel && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={styles.startButton}
-                onClick={onResume}
-              >
-                Continue {resumeLabel}
-              </button>
-            )}
-
-            {featuredGame && (
-              <button
-                type="button"
-                className="btn btn-primary home-continue"
-                style={styles.startButton}
-                onClick={() => onContinueGame?.(featuredGame.id)}
-              >
-                <span className="home-continue-label">Continue {featuredGame.teams}</span>
-                <span className="home-continue-score">{featuredGame.score}</span>
-              </button>
-            )}
-
+        <div className="home-actions">
+          {showSetup ? (
             <button
               type="button"
-              className={hasOpenGame ? 'btn btn-ghost' : 'btn btn-primary'}
-              style={
-                hasOpenGame
-                  ? { ...styles.startButton, backgroundColor: 'transparent', color: THEME.text, border: `1.5px solid ${THEME.borderSoft}`, boxShadow: 'none' }
-                  : styles.startButton
-              }
+              className={hasOpenGame ? 'btn home-quiet' : 'btn btn-primary'}
               onClick={handleStart}
             >
-              {hasOpenGame ? 'New game' : 'Start'}
+              Start
             </button>
-          </div>
+          ) : (
+            <button type="button" className="btn home-quiet" onClick={() => setStartingNew(true)}>
+              New game
+            </button>
+          )}
+
+          {showSetup && hasOpenGame && (
+            <button type="button" className="home-dismiss" onClick={cancelNewGame}>
+              Cancel
+            </button>
+          )}
+
+          {endedGames.length > 0 && (
+            <button type="button" className="home-past" onClick={onOpenPast}>
+              <span>Past games</span>
+              <span className="home-past-meta">
+                <span>{endedGames.length}</span>
+                <span aria-hidden="true">›</span>
+              </span>
+            </button>
+          )}
+        </div>
       </div>
     </AppShell>
   );
@@ -372,18 +413,5 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s ease',
     textAlign: 'left',
     fontWeight: '500',
-  },
-  startButton: {
-    width: '100%',
-    padding: '16px',
-    fontSize: '18px',
-    fontWeight: 'bold',
-    backgroundColor: THEME.open,
-    color: THEME.textOnAccent,
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: THEME.shadowCta,
   },
 };

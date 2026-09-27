@@ -41,12 +41,15 @@ export function ArchiveGameScreen({
   onChange,
   theme = 'dark',
   onThemeChange,
+  backLabel,
 }: {
   game: ArchivedGame;
   onBack: () => void;
   onChange: (game: ArchivedGame) => void;
   theme?: Theme;
   onThemeChange?: (theme: Theme) => void;
+  /** When set, this screen was opened from a list, so Back returns there. */
+  backLabel?: string;
 }) {
   const [openPoint, setOpenPoint] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -92,7 +95,14 @@ export function ArchiveGameScreen({
     <AppShell
       title={`${game.team1Name} vs ${game.team2Name}`}
       width="narrow"
-      onHome={onBack}
+      onHome={backLabel ? undefined : onBack}
+      left={
+        backLabel ? (
+          <button type="button" className="btn btn-ghost" onClick={onBack}>
+            ← {backLabel}
+          </button>
+        ) : undefined
+      }
       theme={theme}
       onThemeChange={onThemeChange}
     >

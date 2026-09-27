@@ -35,7 +35,7 @@ test('the board still opens and the score survives with no connection', async ({
     .toContain('"team1Score":2');
 
   await page.reload();
-  await page.getByRole('button', { name: `Continue ${TEAM} 2–0 ${OPPONENT}` }).click();
+  await page.getByRole('button', { name: `Continue ${TEAM} vs ${OPPONENT}` }).click();
   await expect(scoreTile(page, 1).locator('.score-num')).toHaveText('2');
   await expect(page.getByText('Point 3', { exact: true })).toBeVisible();
 

@@ -200,6 +200,7 @@ export default function App() {
   const [archive, setArchive] = useState<ArchivedGame[]>(() => loadGameArchive());
   const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
   const [activeArchiveId, setActiveArchiveId] = useState<string | null>(null);
+  const [browsePast, setBrowsePast] = useState(false);
 
   // Track rotation index for men and women
   const [openIndex, setOpenIndex] = useState(0);
@@ -344,6 +345,7 @@ export default function App() {
   };
 
   const handleStartGame = (teamName: string) => {
+    setBrowsePast(false);
     const trimmed = teamName.trim();
     archiveSessionIfPlayed(loadGameSession());
     resetScoreboardForNewSession();
@@ -463,6 +465,7 @@ export default function App() {
     if (id) session.archiveId = id;
     flushGameSession(session);
     if (id) setActiveArchiveId(id);
+    setBrowsePast(false);
     setResumeLabel(continueLabel);
     exitWatch();
     setOpenArchiveId(null);
@@ -479,6 +482,7 @@ export default function App() {
       setOpenArchiveId(id);
       return;
     }
+    setBrowsePast(false);
     const current = loadGameSession();
     if (current?.gameStarted && sameSavedGame(current, game)) {
       applyRestoredSession({ ...current, archiveId: id });
@@ -502,6 +506,7 @@ export default function App() {
 
   const leaveToHome = () => {
     resetScoreboardForNewSession();
+    setBrowsePast(false);
     setShowHomeScreen(true);
     setShowRoster(false);
     setSetupStep('roster');
@@ -1220,12 +1225,20 @@ export default function App() {
   const liveGameInList =
     liveSession?.gameStarted === true &&
     archive.some((game) => !game.ended && sameSavedGame(liveSession, game));
+  const resumeGame =
+    resumeLabel && liveSession?.gameStarted && !liveGameInList
+      ? {
+          teams: `${liveSession.team1Name} vs ${liveSession.team2Name}`,
+          score: `${liveSession.team1Score}–${liveSession.team2Score}`,
+        }
+      : null;
 
   if (showHomeScreen && openArchive) {
     return (
       <ArchiveGameScreen
         game={openArchive}
         onBack={() => setOpenArchiveId(null)}
+        backLabel={browsePast ? 'Back' : undefined}
         onChange={(next) => setArchive(replaceArchivedGame(next))}
         theme={theme}
         onThemeChange={setTheme}
@@ -1237,8 +1250,8 @@ export default function App() {
     return (
       <HomeScreen
         onStart={handleStartGame}
-        onResume={resumeLabel && !liveGameInList ? handleResumeGame : undefined}
-        resumeLabel={resumeLabel}
+        onResume={resumeGame ? handleResumeGame : undefined}
+        resumeGame={resumeGame}
         onForgetTeam={handleForgetTeam}
         archivedGames={archive.map((game) => ({
           id: game.id,
@@ -1249,6 +1262,9 @@ export default function App() {
         }))}
         onContinueGame={handleContinueGame}
         onForgetGame={handleForgetGame}
+        pastOpen={browsePast}
+        onOpenPast={() => setBrowsePast(true)}
+        onClosePast={() => setBrowsePast(false)}
       />
     );
   }

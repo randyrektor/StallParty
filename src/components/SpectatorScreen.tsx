@@ -48,7 +48,19 @@ function statusCopy(
   };
 }
 
-function LineChips({
+function Seat({ player }: { player: SpectatorLinePlayer }) {
+  return (
+    <span
+      role="listitem"
+      className={`spectator-name spectator-name--${player.g === 'O' ? 'open' : 'women'}`}
+      aria-label={`${player.name}, ${player.g === 'O' ? 'open' : 'woman'}`}
+    >
+      <span className="spectator-name-text">{player.name}</span>
+    </span>
+  );
+}
+
+function LineSeats({
   label,
   players,
   variant,
@@ -57,30 +69,17 @@ function LineChips({
   players: SpectatorLinePlayer[];
   variant: 'this' | 'next';
 }) {
-  const open = players.filter((player) => player.g === 'O');
-  const women = players.filter((player) => player.g === 'W');
+  const ordered = [
+    ...players.filter((player) => player.g === 'O'),
+    ...players.filter((player) => player.g === 'W'),
+  ];
   return (
     <div className={`spectator-line spectator-line--${variant}`}>
       <div className="spectator-split-label">{label}</div>
-      <div className="spectator-name-rows">
-        {open.length > 0 && (
-          <div className="spectator-name-row" aria-label={`${label} open`}>
-            {open.map((player, index) => (
-              <span key={`${player.g}-${index}-${player.name}`} className="spectator-name spectator-name--open">
-                {player.name}
-              </span>
-            ))}
-          </div>
-        )}
-        {women.length > 0 && (
-          <div className="spectator-name-row" aria-label={`${label} women`}>
-            {women.map((player, index) => (
-              <span key={`${player.g}-${index}-${player.name}`} className="spectator-name spectator-name--women">
-                {player.name}
-              </span>
-            ))}
-          </div>
-        )}
+      <div className="spectator-name-grid" role="list">
+        {ordered.map((player, index) => (
+          <Seat key={`${player.g}-${index}-${player.name}`} player={player} />
+        ))}
       </div>
     </div>
   );
@@ -197,10 +196,10 @@ export function SpectatorScreen({
         {showNames && (
           <div className="spectator-names">
             {snapshot.line && snapshot.line.length > 0 && (
-              <LineChips label="This line" players={snapshot.line} variant="this" />
+              <LineSeats label="This line" players={snapshot.line} variant="this" />
             )}
             {snapshot.next && snapshot.next.length > 0 && (
-              <LineChips label="Next" players={snapshot.next} variant="next" />
+              <LineSeats label="Next" players={snapshot.next} variant="next" />
             )}
           </div>
         )}

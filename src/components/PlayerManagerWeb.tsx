@@ -146,7 +146,7 @@ function tickRosterEdgeScroll() {
 }
 
 function rosterScrollTarget(): HTMLElement | null {
-  const sheet = document.querySelector('.app-shell-body > .roster-sheet');
+  const sheet = document.querySelector('.roster-sheet');
   if (sheet instanceof HTMLElement) {
     const overflow = getComputedStyle(sheet).overflowY;
     if (overflow === 'auto' || overflow === 'scroll') return sheet;
@@ -1332,8 +1332,8 @@ export function PlayerManagerWeb({
   const shellTitle = gameStarted ? 'Roster' : isLineStep ? 'Game setup' : 'Roster';
 
   useEffect(() => {
-    const sheet = document.querySelector('.app-shell-body > .roster-sheet');
-    if (sheet instanceof HTMLElement) sheet.scrollTop = 0;
+    const body = document.querySelector('.app-shell-body');
+    if (body instanceof HTMLElement) body.scrollTop = 0;
   }, [isLineStep, isRosterStep]);
 
   return (
@@ -1365,6 +1365,7 @@ export function PlayerManagerWeb({
         ) : undefined
       }
     >
+      <div className={gameStarted ? undefined : 'kickoff-column'}>
           <div className={`roster-sheet${isLineStep ? ' roster-sheet--line' : ''}`}>
           {gameStarted && pendingPlayers.length > 0 && (
             <div style={styles.pendingExplainer}>
@@ -1519,6 +1520,7 @@ export function PlayerManagerWeb({
               Start game
             </button>
           )}
+      </div>
     </AppShell>
   );
 }

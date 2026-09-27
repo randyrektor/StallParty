@@ -148,7 +148,7 @@ test('keeps an open game when you leave, and after a reload', async ({ page }) =
     .toContain('"team1Score":1');
 
   await page.reload();
-  await page.getByRole('button', { name: `Continue ${TEAM} 1–0 ${OPPONENT}` }).click();
+  await page.getByRole('button', { name: `Continue ${TEAM} vs ${OPPONENT}` }).click();
   await expect(scoreTile(page, 1).locator('.score-num')).toHaveText('1');
   await expect(page.getByText('Point 2', { exact: true })).toBeVisible();
   await expect(currentLine(page)).toHaveText(['Eden', 'Fran', 'Alex', 'Blake']);
@@ -159,7 +159,7 @@ test('keeps an open game when you leave, and after a reload', async ({ page }) =
   await expect(scoreTile(page, 2).locator('.score-num')).toHaveText('0');
 });
 
-test('ends a game and keeps the summary on the homepage', async ({ page }) => {
+test('ends a game and keeps the summary in past games', async ({ page }) => {
   await startSidelineGame(page);
   await scorePoint(page, 1, '1');
 
@@ -176,11 +176,15 @@ test('ends a game and keeps the summary on the homepage', async ({ page }) => {
   await expect(page.getByText('Breaks', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(page.getByRole('button', { name: `Continue ${TEAM} vs ${OPPONENT}` })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Past games' }).click();
   const saved = page.getByRole('button', { name: new RegExp(`${TEAM} vs ${OPPONENT}`) });
   await expect(saved).toContainText('1–0');
   await expect(saved).not.toContainText('Continue');
   await saved.click();
   await expect(page.getByRole('heading', { name: `${TEAM} vs ${OPPONENT}` })).toBeVisible();
+  await page.getByRole('button', { name: '← Back', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Past games' })).toBeVisible();
 });
 
 test('imports a roster and exports it again', async ({ page }) => {
@@ -296,6 +300,6 @@ test('keeps the light theme after a reload', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await page.getByRole('button', { name: `Continue ${TEAM} 0–0 ${OPPONENT}` }).click();
+  await page.getByRole('button', { name: `Continue ${TEAM} vs ${OPPONENT}` }).click();
   await expect(page.getByRole('button', { name: 'Switch to dark' })).toBeVisible();
 });
