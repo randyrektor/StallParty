@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { flushSync } from 'react-dom';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal, flushSync } from 'react-dom';
 import { DndContext, DragOverlay, MeasuringStrategy, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, type DragMoveEvent, type DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Player, type LineupSize, type SplitCycle, type PlayerPosition, PLAYER_POSITIONS, PLAYER_POSITION_LABELS, parseJersey } from '../types';
+import { Player, type LineupSize, type SplitCycle, type PlayerPosition, type Theme, PLAYER_POSITIONS, PLAYER_POSITION_LABELS, parseJersey } from '../types';
 import { THEME } from '../constants';
 import { AppShell } from './AppShell';
 import { PlayerSeat } from './PlayerSeat';
@@ -145,10 +145,20 @@ function tickRosterEdgeScroll() {
   lock.frame = requestAnimationFrame(tickRosterEdgeScroll);
 }
 
+function rosterScrollTarget(): HTMLElement | null {
+  const sheet = document.querySelector('.app-shell-body > .roster-sheet');
+  if (sheet instanceof HTMLElement) {
+    const overflow = getComputedStyle(sheet).overflowY;
+    if (overflow === 'auto' || overflow === 'scroll') return sheet;
+  }
+  const body = document.querySelector('.app-shell-body');
+  return body instanceof HTMLElement ? body : null;
+}
+
 function lockRosterScroll() {
   if (rosterScrollLock) return;
-  const el = document.querySelector('.app-shell-body');
-  if (!(el instanceof HTMLElement)) return;
+  const el = rosterScrollTarget();
+  if (!el) return;
   const lock: RosterScrollLock = {
     el,
     top: el.scrollTop,
@@ -257,6 +267,8 @@ interface PlayerManagerWebProps {
   onOpenSettings?: () => void;
   onBack?: () => void;
   onHome?: () => void;
+  theme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
   lineupSize?: LineupSize;
   startingOpen?: number;
   splitCycle?: SplitCycle;
@@ -276,6 +288,10 @@ function stopSeatDrag(e: React.SyntheticEvent) {
   e.stopPropagation();
 }
 
+function isPositionMenu(target: EventTarget | null) {
+  return target instanceof Element && target.closest('.pos-select-menu') != null;
+}
+
 function PositionSelect({
   value,
   onChange,
@@ -287,23 +303,115 @@ function PositionSelect({
   ariaLabel: string;
   className?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+
+  const placeMenu = () => {
+    const button = buttonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+      setOpen(false);
+      return;
+    }
+    const width = Math.max(rect.width, 148);
+    const menuHeight = 4 * 44 + 8;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const top = openUp ? Math.max(8, rect.top - gap - menuHeight) : rect.bottom + gap;
+    setMenuStyle({ position: 'fixed', top, left, width, zIndex: 40 });
+  };
+
+  useLayoutEffect(() => {
+    if (open) placeMenu();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointer, true);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', placeMenu);
+    window.addEventListener('scroll', placeMenu, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', placeMenu);
+      window.removeEventListener('scroll', placeMenu, true);
+    };
+  }, [open]);
+
+  const choose = (next: PlayerPosition | '') => {
+    onChange(next);
+    setOpen(false);
+  };
+
   return (
-    <select
-      className={className}
-      value={value}
-      aria-label={ariaLabel}
-      onPointerDown={stopSeatDrag}
-      onMouseDown={stopSeatDrag}
-      onClick={stopSeatDrag}
-      onChange={(e) => onChange(e.target.value as PlayerPosition | '')}
-    >
-      <option value="">Pos</option>
-      {PLAYER_POSITIONS.map((pos) => (
-        <option key={pos} value={pos}>
-          {PLAYER_POSITION_LABELS[pos]}
-        </option>
-      ))}
-    </select>
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        className={className}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onPointerDown={(event) => {
+          stopSeatDrag(event);
+          // Focusing this control would scroll Game setup so the field sits
+          // in the middle of the phone.
+          event.preventDefault();
+        }}
+        onMouseDown={stopSeatDrag}
+        onClick={(event) => {
+          stopSeatDrag(event);
+          setOpen((current) => !current);
+        }}
+      >
+        {value ? PLAYER_POSITION_LABELS[value] : 'Pos'}
+      </button>
+      {open &&
+        createPortal(
+          <ul
+            ref={menuRef}
+            className="pos-select-menu"
+            role="listbox"
+            aria-label={ariaLabel}
+            style={menuStyle}
+          >
+            <li>
+              <button type="button" role="option" aria-selected={value === ''} onClick={() => choose('')}>
+                Pos
+              </button>
+            </li>
+            {PLAYER_POSITIONS.map((pos) => (
+              <li key={pos}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={value === pos}
+                  onClick={() => choose(pos)}
+                >
+                  {PLAYER_POSITION_LABELS[pos]}
+                </button>
+              </li>
+            ))}
+          </ul>,
+          document.body
+        )}
+    </>
   );
 }
 
@@ -349,6 +457,7 @@ function SortablePlayer({
   player,
   index,
   isEditMode,
+  compact,
   onDelete,
   isPending,
   onLongPress,
@@ -358,6 +467,7 @@ function SortablePlayer({
   player: Player;
   index: number;
   isEditMode: boolean;
+  compact: boolean;
   onDelete: (player: Player) => void;
   isPending: boolean;
   onLongPress: () => void;
@@ -369,6 +479,7 @@ function SortablePlayer({
   const startPosition = useRef<{ x: number; y: number } | null>(null);
   const [jerseyText, setJerseyText] = useState(player.jersey != null ? String(player.jersey) : '');
   const [editingName, setEditingName] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(false);
   const [nameText, setNameText] = useState(player.name);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const cancelNameEdit = useRef(false);
@@ -387,6 +498,7 @@ function SortablePlayer({
     flushSync(() => {
       setNameText(player.name);
       setEditingName(true);
+      setMetaOpen(true);
     });
     const input = nameInputRef.current;
     if (!input) return;
@@ -434,7 +546,7 @@ function SortablePlayer({
 
   // Hold still to open multi-delete. Movement cancels it so the gesture can scroll.
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (isEditMode || editingName) return;
+    if (isEditMode || editingName || metaOpen) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('input, select, textarea, .player-seat-add-now')) return;
 
@@ -472,14 +584,50 @@ function SortablePlayer({
     handlePointerUp();
   };
 
+  const showNameInput = compact ? metaOpen : editingName;
+  const showFields = !compact || metaOpen;
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!compact || !metaOpen) return;
+    const closeIfOutside = (event: PointerEvent) => {
+      const row = rowRef.current;
+      const target = event.target;
+      if (!row || !(target instanceof Node) || row.contains(target) || isPositionMenu(target)) return;
+      setEditingName(false);
+      setMetaOpen(false);
+    };
+    document.addEventListener('pointerdown', closeIfOutside, true);
+    return () => document.removeEventListener('pointerdown', closeIfOutside, true);
+  }, [compact, metaOpen]);
+
   return (
     <div
+      ref={rowRef}
       className="roster-row"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onContextMenu={(e) => e.preventDefault()}
+      onBlur={(e) => {
+        if (!metaOpen) return;
+        const row = e.currentTarget;
+        // The sortable seat is focusable, so wait until the next focus lands.
+        window.setTimeout(() => {
+          const active = document.activeElement;
+          if (
+            active instanceof HTMLElement &&
+            (isPositionMenu(active) ||
+              (row.contains(active) &&
+                (active.matches('input, textarea, select') || active.closest('.player-seat-field') != null)))
+          ) {
+            return;
+          }
+          setEditingName(false);
+          setMetaOpen(false);
+        }, 0);
+      }}
     >
       <span className="roster-index">
         {player.number > 0 ? player.number : index + 1}
@@ -489,7 +637,7 @@ function SortablePlayer({
         gender={player.gender}
         name={player.name}
         nameSlot={
-          editingName ? (
+          showNameInput ? (
             <input
               ref={nameInputRef}
               className="player-seat-name"
@@ -519,10 +667,13 @@ function SortablePlayer({
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   e.currentTarget.blur();
+                  setMetaOpen(false);
                 } else if (e.key === 'Escape') {
                   e.preventDefault();
                   cancelNameEdit.current = true;
-                  e.currentTarget.blur();
+                  setNameText(player.name);
+                  setEditingName(false);
+                  setMetaOpen(false);
                 }
               }}
             />
@@ -545,6 +696,8 @@ function SortablePlayer({
           )
         }
         pending={isPending}
+        jersey={player.jersey}
+        position={player.position}
         statusSlot={
           isPending ? (
             onForcePending ? (
@@ -567,23 +720,27 @@ function SortablePlayer({
           ) : undefined
         }
         jerseySlot={
-          <JerseyInput
-            value={jerseyText}
-            onChange={commitJersey}
-            ariaLabel={`Jersey number for ${player.name}`}
-          />
+          showFields ? (
+            <JerseyInput
+              value={jerseyText}
+              onChange={commitJersey}
+              ariaLabel={`Jersey number for ${player.name}`}
+            />
+          ) : undefined
         }
         positionSlot={
-          <PositionSelect
-            value={player.position ?? ''}
-            onChange={(position) =>
-              onUpdate(player, {
-                jersey: player.jersey,
-                position: position || undefined,
-              })
-            }
-            ariaLabel={`Position for ${player.name}`}
-          />
+          showFields ? (
+            <PositionSelect
+              value={player.position ?? ''}
+              onChange={(position) =>
+                onUpdate(player, {
+                  jersey: player.jersey,
+                  position: position || undefined,
+                })
+              }
+              ariaLabel={`Position for ${player.name}`}
+            />
+          ) : undefined
         }
         style={{
           opacity: isDragging ? 0.35 : 1,
@@ -619,7 +776,6 @@ function SortablePlayer({
 
 function AddGhostRow({
   gender,
-  nextNumber,
   value,
   jersey,
   position,
@@ -630,7 +786,6 @@ function AddGhostRow({
   onSubmit,
 }: {
   gender: 'O' | 'W';
-  nextNumber: number;
   value: string;
   jersey: string;
   position: PlayerPosition | '';
@@ -644,7 +799,7 @@ function AddGhostRow({
   const trimmed = value.trim();
   return (
     <div className="roster-row">
-      <span className="roster-index">{nextNumber}</span>
+      <span className="roster-index roster-index--blank" aria-hidden="true" />
       <div
         className={`player-seat player-seat-add player-seat--${gender === 'O' ? 'open' : 'women'}`}
         onClick={(e) => {
@@ -709,6 +864,7 @@ function GenderRosterColumn({
   firstCount,
   showLinePreview,
   isEditMode,
+  compact,
   pendingPlayers,
   onDelete,
   onLongPress,
@@ -729,6 +885,7 @@ function GenderRosterColumn({
   firstCount: number;
   showLinePreview: boolean;
   isEditMode: boolean;
+  compact: boolean;
   pendingPlayers: Player[];
   onDelete: (player: Player) => void;
   onLongPress: () => void;
@@ -751,7 +908,6 @@ function GenderRosterColumn({
   const addRow = (
     <AddGhostRow
       gender={gender}
-      nextNumber={players.length + 1}
       value={addValue}
       jersey={addJersey}
       position={addPosition}
@@ -770,6 +926,7 @@ function GenderRosterColumn({
         player={player}
         index={startIndex + index}
         isEditMode={isEditMode}
+        compact={compact}
         onDelete={onDelete}
         isPending={isPending(player)}
         onLongPress={onLongPress}
@@ -789,7 +946,7 @@ function GenderRosterColumn({
               {playerRows(first, 0)}
               {Array.from({ length: emptyCount }, (_, i) => (
                 <div key={`empty-${gender}-${i}`} className="roster-row">
-                  <span className="roster-index roster-index--empty">{players.length + i + 1}</span>
+                  <span className="roster-index roster-index--blank" aria-hidden="true" />
                   <PlayerSeat
                     gender={gender}
                     empty
@@ -975,6 +1132,8 @@ export function PlayerManagerWeb({
   onOpenSettings,
   onBack,
   onHome,
+  theme = 'dark',
+  onThemeChange,
   lineupSize = 7,
   startingOpen = 4,
   splitCycle = 'ABBA',
@@ -1172,10 +1331,18 @@ export function PlayerManagerWeb({
 
   const shellTitle = gameStarted ? 'Roster' : isLineStep ? 'Game setup' : 'Roster';
 
+  useEffect(() => {
+    const sheet = document.querySelector('.app-shell-body > .roster-sheet');
+    if (sheet instanceof HTMLElement) sheet.scrollTop = 0;
+  }, [isLineStep, isRosterStep]);
+
   return (
     <AppShell
       title={shellTitle}
       onHome={onHome}
+      theme={theme}
+      onThemeChange={onThemeChange}
+      onSettings={onOpenSettings}
       left={
         <>
           {onBack && !gameStarted && (
@@ -1191,18 +1358,11 @@ export function PlayerManagerWeb({
         </>
       }
       right={
-        <>
-          {gameStarted && onOpenSettings && (
-            <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
-              Settings
-            </button>
-          )}
-          {isEditMode && (
-            <button type="button" className="btn btn-primary" onClick={() => setIsEditMode(false)}>
-              Done
-            </button>
-          )}
-        </>
+        isEditMode ? (
+          <button type="button" className="btn btn-primary" onClick={() => setIsEditMode(false)}>
+            Done
+          </button>
+        ) : undefined
       }
     >
           <div className={`roster-sheet${isLineStep ? ' roster-sheet--line' : ''}`}>
@@ -1242,6 +1402,7 @@ export function PlayerManagerWeb({
                 firstCount={firstPattern.men}
                 showLinePreview={isLineStep}
                 isEditMode={isEditMode}
+                compact={gameStarted}
                 pendingPlayers={pendingOpenPlayers}
                 onDelete={handleDeletePlayer}
                 onLongPress={handleLongPress}
@@ -1266,6 +1427,7 @@ export function PlayerManagerWeb({
                 firstCount={firstPattern.women}
                 showLinePreview={isLineStep}
                 isEditMode={isEditMode}
+                compact={gameStarted}
                 pendingPlayers={pendingWomenPlayers}
                 onDelete={handleDeletePlayer}
                 onLongPress={handleLongPress}
@@ -1346,6 +1508,7 @@ export function PlayerManagerWeb({
             </div>
           )}
 
+          </div>
           {isRosterStep && (
             <button type="button" className="btn btn-primary kickoff-footer" onClick={onContinueToLine}>
               Set up this game
@@ -1356,7 +1519,6 @@ export function PlayerManagerWeb({
               Start game
             </button>
           )}
-          </div>
     </AppShell>
   );
 }

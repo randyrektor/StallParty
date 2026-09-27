@@ -463,12 +463,12 @@ export function SettingsModal({
                   />
                 </label>
               </div>
-              <div style={styles.matchAdmin}>
+              <div className="settings-match-admin" style={styles.matchAdmin}>
                 {onTagGoalsLiveChange && (
                   <button
                     type="button"
                     style={{
-                      ...styles.compactAction,
+                      ...styles.matchAdminButton,
                       ...(tagGoalsLive ? styles.compactActionOn : {}),
                     }}
                     aria-pressed={tagGoalsLive}
@@ -478,16 +478,16 @@ export function SettingsModal({
                   </button>
                 )}
                 {onChangeTeam && (
-                  <button type="button" style={styles.compactAction} onClick={handleChangeTeam}>
+                  <button type="button" style={styles.matchAdminButton} onClick={handleChangeTeam}>
                     Change team
                   </button>
                 )}
                 {onEndGame && (
-                  <button type="button" style={styles.compactAction} onClick={handleEndGame}>
+                  <button type="button" style={styles.matchAdminButton} onClick={handleEndGame}>
                     End game
                   </button>
                 )}
-                <button type="button" style={styles.compactActionDanger} onClick={handleReset}>
+                <button type="button" style={styles.matchAdminButtonDanger} onClick={handleReset}>
                   Reset game
                 </button>
               </div>
@@ -911,12 +911,55 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap',
   },
   matchAdmin: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gridAutoRows: '1fr',
     gap: '8px',
-    flexWrap: 'wrap',
-    marginTop: '16px',
-    paddingTop: '14px',
+    marginTop: '8px',
+    paddingTop: '8px',
     borderTop: `1px solid ${THEME.borderFaint}`,
+  },
+  matchAdminButton: {
+    width: '100%',
+    height: '100%',
+    minHeight: '52px',
+    padding: '12px 10px',
+    backgroundColor: THEME.bgSubtle3,
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: THEME.borderSofter,
+    borderRadius: 'var(--settings-control-radius)',
+    cursor: 'pointer',
+    color: COLORS.text,
+    fontSize: '14px',
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    textAlign: 'center',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxSizing: 'border-box',
+    lineHeight: 1.25,
+  },
+  matchAdminButtonDanger: {
+    width: '100%',
+    height: '100%',
+    minHeight: '52px',
+    padding: '12px 10px',
+    backgroundColor: THEME.dangerTint,
+    border: `1.5px solid ${THEME.dangerBorder}`,
+    borderRadius: 'var(--settings-control-radius)',
+    cursor: 'pointer',
+    color: COLORS.danger,
+    fontSize: '14px',
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    textAlign: 'center',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxSizing: 'border-box',
+    lineHeight: 1.25,
   },
   exportActions: {
     display: 'flex',

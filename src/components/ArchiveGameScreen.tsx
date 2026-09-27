@@ -5,6 +5,7 @@ import { gameSummary } from '../utils/gameHighlights';
 import { nextPullOverride, pullingTeamForPoint } from '../utils/possession';
 import { shareSummaryImage } from '../utils/scoreShareImage';
 import type { ArchivedGame, ArchivedPoint } from '../utils/gameArchive';
+import type { Theme } from '../types';
 
 function playerName(game: ArchivedGame, id: string | undefined): string {
   if (!id) return '';
@@ -38,10 +39,14 @@ export function ArchiveGameScreen({
   game,
   onBack,
   onChange,
+  theme = 'dark',
+  onThemeChange,
 }: {
   game: ArchivedGame;
   onBack: () => void;
   onChange: (game: ArchivedGame) => void;
+  theme?: Theme;
+  onThemeChange?: (theme: Theme) => void;
 }) {
   const [openPoint, setOpenPoint] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -88,11 +93,8 @@ export function ArchiveGameScreen({
       title={`${game.team1Name} vs ${game.team2Name}`}
       width="narrow"
       onHome={onBack}
-      left={
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
-          Back
-        </button>
-      }
+      theme={theme}
+      onThemeChange={onThemeChange}
     >
       <div className="summary-score">
         <div>

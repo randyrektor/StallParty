@@ -1227,6 +1227,8 @@ export default function App() {
         game={openArchive}
         onBack={() => setOpenArchiveId(null)}
         onChange={(next) => setArchive(replaceArchivedGame(next))}
+        theme={theme}
+        onThemeChange={setTheme}
       />
     );
   }
@@ -1269,6 +1271,8 @@ export default function App() {
           onReady={() => setShowRoster(false)}
           onOpenSettings={() => setSettingsVisible(true)}
           onHome={goHome}
+          theme={theme}
+          onThemeChange={setTheme}
           onBack={
             gameStarted
               ? undefined
@@ -1336,7 +1340,7 @@ export default function App() {
           onKickoff={handleKickoff}
           onHalfPull={handleHalfPull}
           halfChosen={halfPoint != null && halfPull != null}
-          halfChoice={halfPoint === pointNumber ? halfPull : null}
+          halfChoice={halfPull}
           suggestedHalfPull={openingPull === 1 ? 2 : openingPull === 2 ? 1 : null}
           onSubstitute={handleSubstitute}
           onRemoveFromGame={handleRemoveFromGame}

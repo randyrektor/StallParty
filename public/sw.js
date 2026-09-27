@@ -62,6 +62,8 @@ async function cacheShell(urls) {
   );
 }
 
+const cacheLookup = { ignoreVary: true };
+
 async function networkFirstDocument(request) {
   const cache = await caches.open(SHELL);
   try {
@@ -72,15 +74,21 @@ async function networkFirstDocument(request) {
     }
     return response;
   } catch {
-    return (await cache.match(request)) || (await cache.match('/')) || Response.error();
+    return (await cache.match(request, cacheLookup)) || (await cache.match('/', cacheLookup)) || Response.error();
   }
 }
 
 async function cacheFirstAsset(request) {
   const cache = await caches.open(SHELL);
-  const cached = await cache.match(request);
+  // Vite marks these files `Vary: Origin`. A module script sends Origin and the
+  // cache fill does not, so a normal match misses and an offline refresh is blank.
+  const cached = await cache.match(request, cacheLookup);
   if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok && !isHtml(response)) await cache.put(request, response.clone());
-  return response;
+  try {
+    const response = await fetch(request);
+    if (response.ok && !isHtml(response)) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    return Response.error();
+  }
 }

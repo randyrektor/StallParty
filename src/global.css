@@ -262,6 +262,14 @@ input:focus {
   box-shadow: 0 0 0 2px var(--accent-open-tint);
 }
 
+/* Name fields sit on a colored seat. The shared focus shadow draws a second box. */
+.player-seat input:focus,
+.player-seat-add input:focus {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg-elevated); }
 ::-webkit-scrollbar-thumb {
@@ -355,6 +363,12 @@ input:focus {
   padding-bottom: 8px;
 }
 
+/* No title: the right cluster is only icons, so the actions keep the rest of the bar. */
+.app-shell-header--untitled .app-shell-inner {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "left right";
+}
+
 .app-shell-title {
   grid-area: title;
   margin: 0;
@@ -381,27 +395,61 @@ input:focus {
   min-width: 0;
 }
 
+@media (min-width: 601px) {
+  .app-shell-header--untitled .app-shell-side > .btn {
+    flex: 0 0 auto;
+    min-width: max-content;
+    white-space: nowrap;
+  }
+}
+
 .app-shell-side > .btn-home {
   flex: 0 0 auto;
 }
 
-.btn-home-icon {
-  width: 16px;
+.header-roster {
+  position: relative;
+}
+
+.header-roster-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
   height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg-app);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.btn-home-icon,
+.btn-icon-glyph {
+  width: 18px;
+  height: 18px;
   display: block;
-  flex-shrink: 0;
 }
 
 .btn-icon {
   width: 40px;
   min-width: 40px;
+  height: 40px;
   padding: 0;
 }
 
-.btn-icon-glyph {
-  width: 18px;
-  height: 18px;
-  display: block;
+.app-shell-header .btn.btn-icon {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
 }
 
 .app-shell-side--end {
@@ -413,6 +461,7 @@ input:focus {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding-bottom: 0;
 }
 
 .app-shell-body {
@@ -428,7 +477,7 @@ input:focus {
   -webkit-overflow-scrolling: touch;
 }
 
-.app-shell-body.roster-drag-lock {
+.roster-drag-lock {
   overscroll-behavior: none;
   touch-action: none;
   overflow-anchor: none;
@@ -639,6 +688,11 @@ input:focus {
   border-width: 1px;
 }
 
+.settings-clocks .game-clock-field,
+.settings-clocks .soft-cap-input {
+  border-radius: var(--settings-control-radius);
+}
+
 .game-clock-field:focus-within {
   border-color: var(--accent-open);
   box-shadow: 0 0 0 2px var(--accent-open-tint);
@@ -697,7 +751,8 @@ input:focus {
 }
 
 .settings-clocks {
-  margin-bottom: 10px;
+  margin-bottom: 0;
+  gap: 8px;
   /* Settings is capped at 600px; Safari time controls need more than 1/3 of that. */
   grid-template-columns: 1fr 1fr;
 }
@@ -882,8 +937,9 @@ input:focus {
   user-select: none;
 }
 
-.roster-index--empty {
-  opacity: 0.35;
+.roster-index--blank {
+  background: transparent;
+  box-shadow: none;
 }
 
 .roster-sheet {
@@ -913,8 +969,34 @@ input:focus {
   min-width: 0;
 }
 
-.roster-sheet .kickoff-footer {
-  margin-top: 4px;
+.app-shell-body:has(> .kickoff-footer) {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+/* Stay at the top of the phone. A focused control can pan the visual
+   viewport and leave this screen sitting in the middle. */
+@media (max-width: 900px) {
+  .app-shell:has(.kickoff-footer) {
+    top: 0;
+    height: 100lvh;
+    max-height: 100lvh;
+  }
+}
+
+.app-shell-body:has(> .kickoff-footer) > .roster-sheet {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-shell-body > .kickoff-footer {
+  flex: 0 0 auto;
+  margin-top: 12px;
 }
 
 .confirm-overlay {
@@ -931,7 +1013,14 @@ input:focus {
 .confirm-overlay--soft {
   background: rgba(0, 0, 0, 0.45);
   align-items: flex-end;
-  padding-bottom: 28px;
+  padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 601px) {
+  .confirm-overlay--soft {
+    align-items: center;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .confirm-modal {
@@ -1095,6 +1184,22 @@ input:focus {
   border: 1px solid var(--border-soft);
 }
 
+.btn.home-continue {
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+
+.home-continue-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.home-continue-score {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn-primary {
   background: var(--accent-open);
   color: var(--text-on-accent);
@@ -1212,6 +1317,12 @@ input.player-seat-name {
   user-select: text;
 }
 
+input.player-seat-name:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent !important;
+}
+
 .player-seat-meta {
   margin-left: auto;
   display: flex;
@@ -1274,6 +1385,58 @@ input.player-seat-name {
   height: 26px;
   flex-shrink: 0;
   padding: 0 6px;
+}
+
+button.player-seat-field--pos {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.player-seat-field--pos::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.75;
+  flex: 0 0 auto;
+}
+
+.pos-select-menu {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-modal);
+}
+
+.pos-select-menu button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pos-select-menu button[aria-selected='true'] {
+  background: var(--bg-subtle);
 }
 
 .player-seat:not(.player-seat-add) .player-seat-field {
@@ -1357,7 +1520,8 @@ input.player-seat-name {
 
 /* Composer: solid gender outline + tint — not a filled name card, not a dashed empty slot */
 .player-seat-add {
-  padding: 0 8px 0 6px;
+  padding: 4px 8px 4px 4px;
+  min-height: 52px;
   cursor: text;
   box-shadow: none;
   color: var(--text);
@@ -1374,24 +1538,22 @@ input.player-seat-name {
   border: 2px solid var(--accent-women);
 }
 
-.player-seat-add.player-seat--open:focus-within {
-  box-shadow: 0 0 0 3px var(--accent-open-glow);
-}
-
+.player-seat-add.player-seat--open:focus-within,
 .player-seat-add.player-seat--women:focus-within {
-  box-shadow: 0 0 0 3px var(--accent-women-muted);
+  box-shadow: none;
 }
 
 .player-seat-add-plus {
   position: relative;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   margin: 0;
   padding: 0;
   border: none;
   border-radius: 50%;
   color: var(--text-on-accent);
+  cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
 }
@@ -1413,13 +1575,13 @@ input.player-seat-name {
 }
 
 .player-seat-add-plus::before {
-  width: 10px;
+  width: 14px;
   height: 2px;
 }
 
 .player-seat-add-plus::after {
   width: 2px;
-  height: 10px;
+  height: 14px;
 }
 
 .player-seat-add.player-seat--open .player-seat-add-plus {
@@ -1457,6 +1619,7 @@ input.player-seat-name {
 
 .player-seat-add input:focus {
   outline: none;
+  box-shadow: none;
 }
 
 .player-seat-row {
@@ -1767,6 +1930,8 @@ input.player-seat-name {
   min-height: 0;
   width: 100%;
   overflow: hidden;
+  container-type: inline-size;
+  container-name: scoreboard;
 }
 
 .score-top-bar {
@@ -1972,6 +2137,8 @@ input.player-seat-name {
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* Safe area scrolls with the lines, so it doesn't cover the last row. */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .line-section {
@@ -2002,6 +2169,59 @@ input.player-seat-name {
 
 .line-section .player-list {
   flex: 0 0 auto;
+}
+
+/* Two line columns share the board. Under ~340px each, stack them. */
+@container scoreboard (max-width: 695px) {
+  .line-display {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .line-section {
+    flex: 0 0 auto;
+    align-self: stretch;
+    width: 100%;
+  }
+}
+
+/* Landscape phones: the score row was eating the lines. Drop the
+   backing card so the smaller tiles don't fight its corner radius. */
+@media (max-height: 500px) {
+  .scoreboard .score-top-bar {
+    --score-bar-pad: 0px;
+    margin-bottom: 8px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .scoreboard .score-tile {
+    min-height: 48px;
+    padding: 4px 10px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--score-bar-radius);
+    box-shadow: var(--shadow-card);
+  }
+
+  .scoreboard .score-team-name {
+    font-size: 12px;
+    margin-bottom: 0;
+  }
+
+  .scoreboard .score-num {
+    font-size: 32px;
+    padding: 0;
+  }
+
+  .scoreboard .line-info {
+    margin-bottom: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
 }
 
 .player-list {
@@ -2050,6 +2270,10 @@ input.player-seat-name {
 
 .label-short { display: none; }
 .label-full { display: inline; }
+
+.settings-match-admin > button {
+  white-space: normal;
+}
 
 /* Phone (iPhone portrait) */
 @media (max-width: 600px) {
@@ -2190,6 +2414,11 @@ input.player-seat-name {
     padding: 6px 8px;
     gap: 6px;
     min-height: 40px;
+  }
+
+  .player-seat.player-seat-add {
+    min-height: 52px;
+    padding: 4px 8px 4px 4px;
   }
 
   .player-seat-field--jersey {
@@ -2366,8 +2595,22 @@ input.player-seat-name {
   justify-content: stretch;
 }
 
+.confirm-modal:has(.confirm-actions--pull) .confirm-title {
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
 .confirm-actions--pull .btn {
   width: 100%;
+  min-height: 56px;
+  padding: 16px 14px;
+  font-size: 18px;
+}
+
+.confirm-actions--pull .confirm-actions-back {
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 15px;
 }
 
 .confirm-actions--pull .confirm-actions-back {

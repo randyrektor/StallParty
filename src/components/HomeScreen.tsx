@@ -166,7 +166,12 @@ export function HomeScreen({
     }
   };
 
-  const hasOpenGame = archivedGames.some((game) => !game.ended) || Boolean(onResume && resumeLabel);
+  const resumeOpen = Boolean(onResume && resumeLabel);
+  const featuredGame = resumeOpen ? null : (archivedGames.find((game) => !game.ended) ?? null);
+  const listedGames = featuredGame
+    ? archivedGames.filter((game) => game.id !== featuredGame.id)
+    : archivedGames;
+  const hasOpenGame = resumeOpen || archivedGames.some((game) => !game.ended);
 
   return (
     <AppShell showHeader={false} width="narrow" center>
@@ -216,14 +221,14 @@ export function HomeScreen({
             </div>
           )}
 
-          {archivedGames.length > 0 && (
+          {listedGames.length > 0 && (
             <div style={styles.savedTeamsSection}>
               <label style={styles.label}>
                 Games
                 <span className="home-hold-hint">Hold to remove</span>
               </label>
               <div ref={gameListRef} className="home-game-list" style={styles.teamList}>
-                {archivedGames.map((game) => (
+                {listedGames.map((game) => (
                   <HoldButton
                     key={game.id}
                     className="recent-team archive-game"
@@ -255,6 +260,18 @@ export function HomeScreen({
               </button>
             )}
 
+            {featuredGame && (
+              <button
+                type="button"
+                className="btn btn-primary home-continue"
+                style={styles.startButton}
+                onClick={() => onContinueGame?.(featuredGame.id)}
+              >
+                <span className="home-continue-label">Continue {featuredGame.teams}</span>
+                <span className="home-continue-score">{featuredGame.score}</span>
+              </button>
+            )}
+
             <button
               type="button"
               className={hasOpenGame ? 'btn btn-ghost' : 'btn btn-primary'}
@@ -265,7 +282,7 @@ export function HomeScreen({
               }
               onClick={handleStart}
             >
-              {hasOpenGame ? 'New game' : 'Continue'}
+              {hasOpenGame ? 'New game' : 'Start'}
             </button>
           </div>
       </div>
