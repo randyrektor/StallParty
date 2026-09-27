@@ -1276,6 +1276,39 @@ input:focus {
 .home-continue-label {
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The keyboard shrinks the card. A nested scroller then clips the name
+   field, and iOS will not scroll that inner box. Let the shell scroll
+   instead, and keep the field in view. */
+@media (max-width: 900px) {
+  .app-shell-body--center:has(.home-name:focus) {
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: auto;
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    padding-bottom: 12px;
+  }
+
+  .home-card:has(.home-name:focus) {
+    max-height: none;
+  }
+
+  .home-card:has(.home-name:focus) .home-card-body {
+    overflow: visible;
+  }
+
+  .home-card:has(.home-name:focus) .home-open-list,
+  .home-card:has(.home-name:focus) .home-past {
+    display: none;
+  }
+
+  .home-name {
+    scroll-margin-top: 16px;
+  }
 }
 
 .home-continue-score {

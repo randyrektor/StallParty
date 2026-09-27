@@ -118,6 +118,7 @@ export function HomeScreen({
   const [teamName, setTeamName] = useState('');
   const [savedTeams, setSavedTeams] = useState<string[]>([]);
   const [startingNew, setStartingNew] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSavedTeams(loadRecentTeams());
@@ -177,6 +178,40 @@ export function HomeScreen({
   }
   const hasOpenGame = openActions.length > 0;
   const showSetup = !hasOpenGame || startingNew;
+
+  useEffect(() => {
+    const input = nameRef.current;
+    if (!input) return;
+
+    const reveal = () => {
+      const scroller = input.closest('.app-shell-body');
+      if (!(scroller instanceof HTMLElement)) return;
+      if (document.activeElement !== input) {
+        scroller.scrollTop = 0;
+        return;
+      }
+      const target = input.closest('.home-setup') ?? input;
+      if (!(target instanceof HTMLElement)) return;
+      const delta = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      scroller.scrollTop += delta - 12;
+    };
+
+    const schedule = () => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(reveal);
+      });
+    };
+
+    input.addEventListener('focus', schedule);
+    const view = window.visualViewport;
+    view?.addEventListener('resize', schedule);
+    view?.addEventListener('scroll', schedule);
+    return () => {
+      input.removeEventListener('focus', schedule);
+      view?.removeEventListener('resize', schedule);
+      view?.removeEventListener('scroll', schedule);
+    };
+  }, [showSetup]);
 
   const cancelNewGame = () => {
     setStartingNew(false);
@@ -248,9 +283,11 @@ export function HomeScreen({
               ))}
             </div>
           )}
+        </div>
 
+        <div className="home-actions">
           {showSetup && (
-            <div className={hasOpenGame ? 'home-setup home-setup--follow' : 'home-setup'}>
+            <div className="home-setup">
               <div style={styles.inputSection}>
                 <label style={styles.label}>Team name</label>
                 <input
@@ -262,7 +299,9 @@ export function HomeScreen({
                   onChange={(e) => setTeamName(capitalizeNameInput(e.target.value))}
                   onKeyPress={handleKeyPress}
                   placeholder="Enter your team name"
+                  className="home-name"
                   style={styles.input}
+                  ref={nameRef}
                   autoFocus={hasOpenGame}
                 />
               </div>
@@ -293,9 +332,7 @@ export function HomeScreen({
               )}
             </div>
           )}
-        </div>
 
-        <div className="home-actions">
           {showSetup ? (
             <button
               type="button"
