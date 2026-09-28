@@ -168,6 +168,23 @@ test('ends a game and keeps the summary in past games', async ({ page }) => {
   await expect(page.getByText('Holds', { exact: true })).toBeVisible();
   await expect(page.getByText('Breaks', { exact: true })).toBeVisible();
 
+  const share = page.getByRole('button', { name: 'Share summary' });
+  const stats = page.getByRole('button', { name: 'Download stats' });
+  const shareBox = await share.boundingBox();
+  const statsBox = await stats.boundingBox();
+  expect(shareBox).toBeTruthy();
+  expect(statsBox).toBeTruthy();
+  expect(Math.abs(shareBox!.y - statsBox!.y)).toBeLessThan(4);
+  expect(statsBox!.x).toBeGreaterThan(shareBox!.x + shareBox!.width - 4);
+
+  const downloadPromise = page.waitForEvent('download');
+  await stats.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(new RegExp(`${TEAM}-vs-${OPPONENT}\\.txt$`));
+  const report = await readFile((await download.path())!, 'utf8');
+  expect(report).toContain(`${TEAM} 1 – 0 ${OPPONENT}`);
+  expect(report).toContain(`Point 1: ${TEAM}`);
+
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await expect(page.getByRole('button', { name: `Continue ${TEAM} vs ${OPPONENT}` })).toHaveCount(0);
   await page.getByRole('button', { name: 'Past games' }).click();

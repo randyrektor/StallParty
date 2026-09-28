@@ -2991,13 +2991,17 @@ button.player-seat-field--pos::after {
   color: var(--text-secondary);
 }
 
-.summary-share {
-  padding: 8px 14px;
+.summary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-.summary-share-wide {
+.summary-actions .btn {
   width: 100%;
-  margin-bottom: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
 }
 
 .summary-note {

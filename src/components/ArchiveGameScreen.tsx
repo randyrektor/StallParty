@@ -4,6 +4,7 @@ import { applyGoalTag } from '../utils/goalTags';
 import { gameSummary } from '../utils/gameHighlights';
 import { nextPullOverride, pullingTeamForPoint } from '../utils/possession';
 import { shareSummaryImage } from '../utils/scoreShareImage';
+import { downloadTextFile, scoreReportForArchive } from '../utils/scoreReport';
 import type { ArchivedGame, ArchivedPoint } from '../utils/gameArchive';
 import type { Theme } from '../types';
 
@@ -91,6 +92,14 @@ export function ArchiveGameScreen({
     }).finally(() => setSharing(false));
   };
 
+  const downloadStats = () => {
+    const gameDate = new Date().toLocaleDateString();
+    downloadTextFile(
+      `stallparty-${gameDate}-${game.team1Name}-vs-${game.team2Name}.txt`,
+      scoreReportForArchive(game)
+    );
+  };
+
   return (
     <AppShell
       title={`${game.team1Name} vs ${game.team2Name}`}
@@ -150,9 +159,14 @@ export function ArchiveGameScreen({
         </div>
       )}
 
-      <button type="button" className="btn btn-primary summary-share-wide" onClick={share} disabled={sharing}>
-        {sharing ? 'Sharing…' : 'Share summary'}
-      </button>
+      <div className="summary-actions">
+        <button type="button" className="btn btn-primary" onClick={share} disabled={sharing}>
+          {sharing ? 'Sharing…' : 'Share summary'}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={downloadStats}>
+          Download stats
+        </button>
+      </div>
       {!tagged && ourPoints.length > 0 && (
         <p className="summary-note">Tag a point to add who scored. The share card picks it up.</p>
       )}
