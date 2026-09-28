@@ -218,13 +218,12 @@ export function ScoreBoard({
   const tagChoosingThrower = Boolean(tagStrip?.scorerId) && !tagStrip?.throwerId;
   const tagFinished = Boolean(tagStrip?.scorerId && tagStrip?.throwerId);
   const tagScorer = tagStrip?.players.find((player) => player.uuid === tagStrip.scorerId);
-  const tagNames = (tagStrip?.players ?? []).filter((player) => {
-    if (tagChoosingThrower && player.uuid === tagStrip?.scorerId) return false;
-    if (tagFinished && player.uuid !== tagStrip?.scorerId && player.uuid !== tagStrip?.throwerId) {
-      return false;
-    }
-    return true;
-  });
+  const tagThrower = tagStrip?.players.find((player) => player.uuid === tagStrip.throwerId);
+  const tagNames = tagFinished
+    ? [tagScorer, tagThrower].filter((player): player is Player => player != null)
+    : (tagStrip?.players ?? []).filter(
+        (player) => !(tagChoosingThrower && player.uuid === tagStrip?.scorerId),
+      );
 
   const handleScoreClick = (team: 'team1' | 'team2') => {
     if (!gameStarted || capReached) return;
@@ -537,18 +536,7 @@ export function ScoreBoard({
           <p className="goal-tag-ask">
             {!tagStrip.scorerId ? 'Who scored?' : !tagStrip.throwerId ? 'Who threw it?' : 'Tagged'}
           </p>
-          {tagChoosingThrower && tagScorer && (
-            <button
-              type="button"
-              className="goal-tag-name is-tagged goal-tag-scorer"
-              onClick={() => onTagPlayer(tagScorer.uuid)}
-              aria-label={`${tagScorer.name} scored. Tap to change.`}
-            >
-              <span>{tagScorer.name}</span>
-              <span className="goal-tag-role">Score</span>
-            </button>
-          )}
-          <div className="goal-tag-names">
+          <div className={`goal-tag-names${tagFinished ? ' is-preview' : ''}`}>
             {tagNames.map((player) => {
               const role =
                 player.uuid === tagStrip.scorerId
@@ -561,6 +549,13 @@ export function ScoreBoard({
                   key={player.uuid}
                   type="button"
                   className={`goal-tag-name${role ? ' is-tagged' : ''}`}
+                  aria-label={
+                    role === 'Score'
+                      ? `${player.name} scored`
+                      : role === 'Throw'
+                        ? `${player.name} threw it`
+                        : undefined
+                  }
                   onClick={() => onTagPlayer(player.uuid)}
                 >
                   <span>{player.name}</span>

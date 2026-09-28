@@ -274,8 +274,11 @@ test('tags who scored and who threw our goal', async ({ page }) => {
   await expect(tag).toContainText('Who scored?');
   await tag.getByRole('button', { name: 'Alex', exact: true }).click();
   await expect(tag).toContainText('Who threw it?');
+  await expect(tag.getByRole('button', { name: 'Alex', exact: true })).toHaveCount(0);
   await tag.getByRole('button', { name: 'Blake', exact: true }).click();
   await expect(tag).toContainText('Tagged');
+  await expect(tag.locator('.goal-tag-name')).toHaveText(['Alex Score', 'Blake Throw']);
+  await expect(tag.getByRole('button', { name: 'Casey', exact: true })).toHaveCount(0);
   await tag.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(tag).toBeHidden();
 });

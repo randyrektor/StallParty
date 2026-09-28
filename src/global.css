@@ -2844,8 +2844,8 @@ button.player-seat-field--pos::after {
   display: none;
 }
 
-.goal-tag-scorer {
-  flex: 0 0 auto;
+.goal-tag-names.is-preview {
+  overflow: visible;
 }
 
 .goal-tag-name {
