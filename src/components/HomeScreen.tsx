@@ -125,10 +125,7 @@ export function HomeScreen({
   }, []);
 
   const handleStart = () => {
-    if (!teamName.trim()) {
-      alert('Please enter a team name');
-      return;
-    }
+    if (!teamName.trim()) return;
 
     const trimmedName = capitalizeNameInput(teamName.trim());
     const updatedTeams = rememberRecentTeam(savedTeams, trimmedName);
@@ -338,6 +335,7 @@ export function HomeScreen({
               type="button"
               className={hasOpenGame ? 'btn home-quiet' : 'btn btn-primary'}
               onClick={handleStart}
+              disabled={!teamName.trim()}
             >
               Start
             </button>

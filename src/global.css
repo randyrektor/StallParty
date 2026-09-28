@@ -462,6 +462,8 @@ input:focus {
   flex-direction: column;
   overflow: hidden;
   padding-bottom: 0;
+  /* Room between the cards and this clip. The line list bleeds into it. */
+  --score-gutter: 16px;
 }
 
 .app-shell-body {
@@ -1168,6 +1170,13 @@ input:focus {
 .btn.home-quiet {
   background: transparent;
   color: var(--text);
+  border: 1.5px solid var(--border-soft);
+  box-shadow: none;
+}
+
+.home-actions > .btn:disabled {
+  background: var(--bg-input-soft);
+  color: color-mix(in srgb, var(--text) 40%, transparent);
   border: 1.5px solid var(--border-soft);
   box-shadow: none;
 }
@@ -2042,7 +2051,8 @@ button.player-seat-field--pos::after {
   min-width: 0;
   min-height: 0;
   width: 100%;
-  overflow: hidden;
+  /* Hidden clips --shadow-card flush with the cards. The line list scrolls. */
+  overflow: visible;
   container-type: inline-size;
   container-name: scoreboard;
 }
@@ -2242,7 +2252,6 @@ button.player-seat-field--pos::after {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  width: 100%;
   flex-wrap: nowrap;
   gap: 16px;
   flex: 1 1 0;
@@ -2250,8 +2259,15 @@ button.player-seat-field--pos::after {
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* This scroller would clip --shadow-card. Bleed into the shell gutter
+     and pad the lines back so they stay aligned with the score row. */
+  width: calc(100% + var(--score-gutter, 16px) + var(--score-gutter, 16px));
+  margin-left: calc(var(--score-gutter, 16px) * -1);
+  margin-right: calc(var(--score-gutter, 16px) * -1);
+  padding-left: var(--score-gutter, 16px);
+  padding-right: var(--score-gutter, 16px);
   /* Safe area scrolls with the lines, so it doesn't cover the last row. */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(var(--score-gutter, 16px), env(safe-area-inset-bottom, 0px));
 }
 
 .line-section {
@@ -2435,6 +2451,7 @@ button.player-seat-field--pos::after {
   .app-shell-body:has(.scoreboard) {
     padding-right: 0;
     padding-bottom: 0;
+    --score-gutter: 12px;
   }
 
   .scoreboard > .score-top-bar,
@@ -2603,6 +2620,12 @@ button.player-seat-field--pos::after {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
+    /* Right inset stays on the padding (safe area). Only the left side
+       bleeds into the shell padding. */
+    width: calc(100% + var(--score-gutter, 12px));
+    margin-left: calc(var(--score-gutter, 12px) * -1);
+    margin-right: 0;
+    padding-left: var(--score-gutter, 12px);
     padding-right: max(12px, env(safe-area-inset-right, 0px));
     padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   }

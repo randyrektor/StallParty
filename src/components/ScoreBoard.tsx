@@ -6,6 +6,7 @@ import { formatSoftCapBadge, isSoftCapReached, type SoftPointCap } from '../util
 import {
   activeClockReminder,
   clockReminderCopy,
+  shownClockReminder,
   type GameClockTime,
 } from '../utils/gameClock';
 import { useNowTick } from '../hooks/useNowTick';
@@ -164,8 +165,11 @@ export function ScoreBoard({
 
   const capReached = isSoftCapReached(team1Score, team2Score, softCap);
   const showCapPrompt = gameStarted && capReached && !capPromptDismissed;
-  const clockReminder = activeClockReminder(halfAt, endAt, new Date(now));
-  const reminderKey = clockReminder ? `${clockReminder.kind}:${clockReminder.phase}` : '';
+  const clockReminder = shownClockReminder(
+    activeClockReminder(halfAt, endAt, new Date(now)),
+    dismissedReminder,
+    halfChosen
+  );
 
   const subCandidates = subOut
     ? (() => {
@@ -416,7 +420,14 @@ export function ScoreBoard({
               <button type="button" className="btn btn-ghost" onClick={() => setCapPromptDismissed(true)}>
                 No
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => onEndGame?.()}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setCapPromptDismissed(true);
+                  onEndGame?.();
+                }}
+              >
                 Yes
               </button>
             </div>
@@ -444,10 +455,10 @@ export function ScoreBoard({
           )}
         </div>
       </div>
-      {clockReminder && reminderKey !== dismissedReminder && (
+      {clockReminder && (
         <div className={`clock-reminder${clockReminder.phase === 'now' ? ' clock-reminder--now' : ''}`}>
           <p className="clock-reminder-copy">{clockReminderCopy(clockReminder)}</p>
-          {clockReminder.kind === 'half' && !halfChosen && (
+          {clockReminder.kind === 'half' && (
             <button type="button" className="btn btn-primary clock-reminder-half" onClick={() => setHalfOpen(true)}>
               Halftime
             </button>
@@ -455,7 +466,7 @@ export function ScoreBoard({
           <button
             type="button"
             className="clock-reminder-dismiss"
-            onClick={() => setDismissedReminder(reminderKey)}
+            onClick={() => setDismissedReminder(`${clockReminder.kind}:${clockReminder.phase}`)}
           >
             Dismiss
           </button>

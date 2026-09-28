@@ -73,6 +73,21 @@ export function activeClockReminder(
   return reminderFor('end', endAt, now) ?? reminderFor('half', halfAt, now);
 }
 
+/**
+ * Banner still on screen. Choosing the halftime receiver clears every phase of
+ * that reminder. The time-cap reminder stays until it is dismissed or the game ends.
+ */
+export function shownClockReminder(
+  reminder: ActiveClockReminder | null,
+  dismissedKey: string,
+  halfChosen: boolean
+): ActiveClockReminder | null {
+  if (!reminder) return null;
+  if (reminder.kind === 'half' && halfChosen) return null;
+  if (`${reminder.kind}:${reminder.phase}` === dismissedKey) return null;
+  return reminder;
+}
+
 function formatCountdown(remainingMs: number): string {
   const seconds = Math.max(1, Math.ceil(remainingMs / 1000));
   const minutes = Math.floor(seconds / 60);

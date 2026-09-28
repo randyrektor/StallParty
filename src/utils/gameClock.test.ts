@@ -4,6 +4,7 @@ import {
   clockReminderCopy,
   formatGameClockInput,
   parseGameClockTime,
+  shownClockReminder,
 } from './gameClock';
 
 describe('game clock times', () => {
@@ -60,5 +61,19 @@ describe('clock reminders', () => {
 
   it('stops nagging well after the time', () => {
     expect(activeClockReminder(half, null, new Date(2026, 5, 1, 19, 30, 0))).toBeNull();
+  });
+
+  it('clears the halftime reminder once a receiver is chosen', () => {
+    const soon = activeClockReminder(half, end, new Date(2026, 5, 1, 19, 13, 30));
+    const now = activeClockReminder(half, end, new Date(2026, 5, 1, 19, 15, 5));
+    expect(shownClockReminder(soon, '', false)?.kind).toBe('half');
+    expect(shownClockReminder(soon, '', true)).toBeNull();
+    expect(shownClockReminder(now, '', true)).toBeNull();
+  });
+
+  it('keeps the time cap reminder after halftime, until that reminder is dismissed', () => {
+    const reminder = activeClockReminder(19 * 60 + 59, end, new Date(2026, 5, 1, 19, 59, 0));
+    expect(shownClockReminder(reminder, '', true)).toEqual(reminder);
+    expect(shownClockReminder(reminder, 'end:countdown', true)).toBeNull();
   });
 });

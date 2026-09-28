@@ -20,24 +20,16 @@ test.beforeEach(async ({ page }) => {
   await openFresh(page);
 });
 
-test('asks for a team name before leaving home', async ({ page }) => {
-  const expectNameAlert = () =>
-    new Promise<void>((resolve, reject) => {
-      page.once('dialog', (dialog) => {
-        if (dialog.message() === 'Please enter a team name') resolve();
-        else reject(new Error(`Unexpected dialog: ${dialog.message()}`));
-        void dialog.accept();
-      });
-    });
+test('keeps Start off until a team name is entered', async ({ page }) => {
+  const start = page.getByRole('button', { name: 'Start', exact: true });
+  const field = page.getByPlaceholder('Enter your team name');
+  await expect(start).toBeDisabled();
 
-  const blank = expectNameAlert();
-  await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await blank;
+  await field.fill('   ');
+  await expect(start).toBeDisabled();
 
-  await page.getByPlaceholder('Enter your team name').fill('   ');
-  const spaces = expectNameAlert();
-  await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await spaces;
+  await field.fill('river city');
+  await expect(start).toBeEnabled();
   await expect(page.getByRole('heading', { name: 'StallParty' })).toBeVisible();
 });
 
@@ -54,6 +46,7 @@ test('capitalizes a team name and remembers it until you remove it', async ({ pa
   const recent = page.getByRole('button', { name: 'River City', exact: true });
   await recent.click();
   await expect(field).toHaveValue('River City');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
 
   let message = '';
   page.once('dialog', (dialog) => {
