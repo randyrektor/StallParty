@@ -48,13 +48,8 @@ test('capitalizes a team name and remembers it until you remove it', async ({ pa
   await expect(field).toHaveValue('River City');
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
 
-  let message = '';
-  page.once('dialog', (dialog) => {
-    message = dialog.message();
-    void dialog.accept();
-  });
-  await recent.click({ delay: 800 });
-  expect(message).toContain('Remove River City');
+  await recent.click({ delay: 1100 });
+  await page.getByRole('button', { name: 'Remove River City', exact: true }).click();
   await expect(recent).toHaveCount(0);
 });
 

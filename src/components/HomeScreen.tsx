@@ -21,6 +21,7 @@ interface HomeGame {
 interface HomeScreenProps {
   onStart: (teamName: string) => void;
   onResume?: () => void;
+  onForgetResume?: () => void;
   resumeGame?: { teams: string; score: string } | null;
   onForgetTeam?: (teamName: string) => void;
   archivedGames?: HomeGame[];
@@ -31,7 +32,15 @@ interface HomeScreenProps {
   onClosePast?: () => void;
 }
 
-const HOLD_MS = 600;
+const HOLD_MS = 800;
+
+function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <button type="button" className="home-remove" aria-label={label} onClick={onRemove}>
+      ×
+    </button>
+  );
+}
 
 function HoldButton({
   className,
@@ -106,6 +115,7 @@ function HoldButton({
 export function HomeScreen({
   onStart,
   onResume,
+  onForgetResume,
   resumeGame,
   onForgetTeam,
   archivedGames = [],
@@ -118,6 +128,7 @@ export function HomeScreen({
   const [teamName, setTeamName] = useState('');
   const [savedTeams, setSavedTeams] = useState<string[]>([]);
   const [startingNew, setStartingNew] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -155,13 +166,22 @@ export function HomeScreen({
   };
 
   const endedGames = archivedGames.filter((game) => game.ended);
-  const openActions: { key: string; label: string; score: string; onClick: () => void }[] = [];
+  const openActions: {
+    key: string;
+    label: string;
+    name: string;
+    score: string;
+    onClick: () => void;
+    onForget: () => void;
+  }[] = [];
   if (onResume && resumeGame) {
     openActions.push({
       key: 'resume',
       label: `Continue ${resumeGame.teams}`,
+      name: resumeGame.teams,
       score: resumeGame.score,
       onClick: onResume,
+      onForget: () => onForgetResume?.(),
     });
   }
   for (const game of archivedGames) {
@@ -169,12 +189,26 @@ export function HomeScreen({
     openActions.push({
       key: game.id,
       label: `Continue ${game.teams}`,
+      name: game.title,
       score: game.score,
       onClick: () => onContinueGame?.(game.id),
+      onForget: () => onForgetGame?.(game.id),
     });
   }
   const hasOpenGame = openActions.length > 0;
   const showSetup = !hasOpenGame || startingNew;
+
+  useEffect(() => {
+    setRemoving(false);
+  }, [pastOpen]);
+
+  useEffect(() => {
+    if (!removing) return;
+    const rows = pastOpen
+      ? endedGames.length
+      : openActions.length + (showSetup ? savedTeams.length : 0);
+    if (rows === 0) setRemoving(false);
+  }, [removing, pastOpen, endedGames.length, openActions.length, savedTeams.length, showSetup]);
 
   useEffect(() => {
     const input = nameRef.current;
@@ -183,7 +217,8 @@ export function HomeScreen({
     const reveal = () => {
       const scroller = input.closest('.app-shell-body');
       if (!(scroller instanceof HTMLElement)) return;
-      if (document.activeElement !== input) {
+      const keyboard = document.documentElement.hasAttribute('data-keyboard');
+      if (document.activeElement !== input || !keyboard) {
         scroller.scrollTop = 0;
         return;
       }
@@ -225,30 +260,37 @@ export function HomeScreen({
             ← Back
           </button>
         }
+        right={
+          removing ? (
+            <button type="button" className="btn btn-primary" onClick={() => setRemoving(false)}>
+              Done
+            </button>
+          ) : undefined
+        }
       >
         {endedGames.length === 0 ? (
           <p className="home-empty">No past games</p>
         ) : (
-          <>
-            <p className="home-hold-note">Hold to remove</p>
-            <div className="home-past-list">
-              {endedGames.map((game) => (
+          <div className="home-past-list">
+            {endedGames.map((game) => (
+              <div key={game.id} className={`home-row${removing ? ' is-removing' : ''}`}>
                 <HoldButton
-                  key={game.id}
                   className="recent-team archive-game"
-                  onPress={() => onContinueGame?.(game.id)}
-                  onHold={() => {
-                    if (window.confirm(`Delete ${game.title}?`)) {
-                      onForgetGame?.(game.id);
-                    }
+                  onPress={() => {
+                    if (removing) return;
+                    onContinueGame?.(game.id);
                   }}
+                  onHold={() => setRemoving(true)}
                 >
                   <span>{game.title}</span>
                   <span className="archive-game-score">{game.score}</span>
                 </HoldButton>
-              ))}
-            </div>
-          </>
+                {removing && (
+                  <RemoveButton label={`Remove ${game.title}`} onRemove={() => onForgetGame?.(game.id)} />
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </AppShell>
     );
@@ -261,22 +303,37 @@ export function HomeScreen({
           <h1 className="home-title" style={styles.title}>{APP_NAME}</h1>
           <p style={styles.subtitle}>Ultimate frisbee scorekeeper</p>
 
+          {removing && (
+            <div className="home-remove-bar">
+              <button type="button" className="btn btn-primary" onClick={() => setRemoving(false)}>
+                Done
+              </button>
+            </div>
+          )}
+
           {hasOpenGame && (
             <div className="home-open-list">
               {openActions.map((action, index) => (
-                <button
-                  key={action.key}
-                  type="button"
-                  className={
-                    index === 0
-                      ? 'btn btn-primary home-continue'
-                      : 'btn home-continue home-continue-secondary'
-                  }
-                  onClick={action.onClick}
-                >
-                  <span className="home-continue-label">{action.label}</span>
-                  <span className="home-continue-score">{action.score}</span>
-                </button>
+                <div key={action.key} className={`home-row${removing ? ' is-removing' : ''}`}>
+                  <HoldButton
+                    className={
+                      index === 0
+                        ? 'btn btn-primary home-continue'
+                        : 'btn home-continue home-continue-secondary'
+                    }
+                    onPress={() => {
+                      if (removing) return;
+                      action.onClick();
+                    }}
+                    onHold={() => setRemoving(true)}
+                  >
+                    <span className="home-continue-label">{action.label}</span>
+                    <span className="home-continue-score">{action.score}</span>
+                  </HoldButton>
+                  {removing && (
+                    <RemoveButton label={`Remove ${action.name}`} onRemove={action.onForget} />
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -305,24 +362,24 @@ export function HomeScreen({
 
               {savedTeams.length > 0 && (
                 <div style={styles.savedTeamsSection}>
-                  <label style={styles.label}>
-                    Recent Teams
-                    <span className="home-hold-hint">Hold to remove</span>
-                  </label>
+                  <label style={styles.label}>Recent Teams</label>
                   <div style={styles.teamList}>
                     {savedTeams.map((team) => (
-                      <HoldButton
-                        key={team}
-                        className={`recent-team${teamName === team ? ' is-selected' : ''}`}
-                        onPress={() => handleSelectTeam(team)}
-                        onHold={() => {
-                          if (window.confirm(`Remove ${team} from recent teams?`)) {
-                            handleRemoveTeam(team);
-                          }
-                        }}
-                      >
-                        {team}
-                      </HoldButton>
+                      <div key={team} className={`home-row${removing ? ' is-removing' : ''}`}>
+                        <HoldButton
+                          className={`recent-team${teamName === team ? ' is-selected' : ''}`}
+                          onPress={() => {
+                            if (removing) return;
+                            handleSelectTeam(team);
+                          }}
+                          onHold={() => setRemoving(true)}
+                        >
+                          {team}
+                        </HoldButton>
+                        {removing && (
+                          <RemoveButton label={`Remove ${team}`} onRemove={() => handleRemoveTeam(team)} />
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

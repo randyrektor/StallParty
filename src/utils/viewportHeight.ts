@@ -32,6 +32,10 @@ export function readViewportBox(
   return { height: Math.round(Math.max(0, full)), offsetTop: 0 };
 }
 
+export function keyboardCovers(box: ViewportBox, fullHeight: number): boolean {
+  return fullHeight - box.height > KEYBOARD_GAP || box.offsetTop > 1;
+}
+
 export function isTypingElement(element: EventTarget | null): boolean {
   if (!(element instanceof HTMLElement)) return false;
   return element.matches('input, textarea, select, [contenteditable="true"]');
@@ -48,15 +52,17 @@ function measureLargeHeight(doc: Document): number {
 
 export function bindViewportHeight(win: Window = window): () => void {
   const apply = () => {
+    const largeHeight = measureLargeHeight(win.document);
     const box = readViewportBox(
       win.visualViewport,
       win.innerHeight,
-      measureLargeHeight(win.document),
+      largeHeight,
       isTypingElement(win.document.activeElement),
     );
     const root = win.document.documentElement;
     root.style.setProperty('--app-height', `${box.height}px`);
     root.style.setProperty('--app-offset', `${box.offsetTop}px`);
+    root.toggleAttribute('data-keyboard', keyboardCovers(box, Math.max(largeHeight, win.innerHeight)));
   };
 
   apply();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readViewportBox } from './viewportHeight';
+import { keyboardCovers, readViewportBox } from './viewportHeight';
 
 describe('readViewportBox', () => {
   it('fills the screen when the visible height already matches', () => {
@@ -35,6 +35,13 @@ describe('readViewportBox', () => {
       height: 844,
       offsetTop: 0,
     });
+  });
+
+  it('marks a covered field without treating a normal focus as the keyboard', () => {
+    const open = readViewportBox({ height: 430, offsetTop: 210 }, 844, 844, true);
+    expect(keyboardCovers(open, 844)).toBe(true);
+    const idle = readViewportBox({ height: 844, offsetTop: 0 }, 844, 844, true);
+    expect(keyboardCovers(idle, 844)).toBe(false);
   });
 
   it('falls back to the window height when the visible viewport is missing', () => {

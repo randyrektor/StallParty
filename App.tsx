@@ -494,6 +494,11 @@ export default function App() {
     applyRestoredSession(session);
   };
 
+  const handleForgetResume = () => {
+    clearGameSession();
+    setResumeLabel(null);
+  };
+
   const handleForgetGame = (id: string) => {
     const game = archive.find((item) => item.id === id);
     setArchive(forgetArchivedGame(id));
@@ -1251,6 +1256,7 @@ export default function App() {
       <HomeScreen
         onStart={handleStartGame}
         onResume={resumeGame ? handleResumeGame : undefined}
+        onForgetResume={handleForgetResume}
         resumeGame={resumeGame}
         onForgetTeam={handleForgetTeam}
         archivedGames={archive.map((game) => ({
