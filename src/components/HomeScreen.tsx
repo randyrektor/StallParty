@@ -197,18 +197,22 @@ export function HomeScreen({
   }
   const hasOpenGame = openActions.length > 0;
   const showSetup = !hasOpenGame || startingNew;
+  const openCount = openActions.length;
+  const [trackedOpenCount, setTrackedOpenCount] = useState(openCount);
+  if (trackedOpenCount !== openCount) {
+    setTrackedOpenCount(openCount);
+    if (removing && !pastOpen && trackedOpenCount > 0 && openCount === 0) {
+      setRemoving(false);
+    }
+  }
+  const nothingLeft = pastOpen
+    ? endedGames.length === 0
+    : openCount + (showSetup ? savedTeams.length : 0) === 0;
+  if (removing && nothingLeft) setRemoving(false);
 
   useEffect(() => {
     setRemoving(false);
   }, [pastOpen]);
-
-  useEffect(() => {
-    if (!removing) return;
-    const rows = pastOpen
-      ? endedGames.length
-      : openActions.length + (showSetup ? savedTeams.length : 0);
-    if (rows === 0) setRemoving(false);
-  }, [removing, pastOpen, endedGames.length, openActions.length, savedTeams.length, showSetup]);
 
   useEffect(() => {
     const input = nameRef.current;
