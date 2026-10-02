@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppShell } from './AppShell';
+import { HomeScreenInstallCard } from './HomeScreenInstallCard';
 import { applyGoalTag } from '../utils/goalTags';
 import { gameSummary } from '../utils/gameHighlights';
 import { nextPullOverride, pullingTeamForPoint } from '../utils/possession';
@@ -167,6 +168,7 @@ export function ArchiveGameScreen({
           Download stats
         </button>
       </div>
+      {game.ended && <HomeScreenInstallCard />}
       {!tagged && ourPoints.length > 0 && (
         <p className="summary-note">Tag a point to add who scored. The share card picks it up.</p>
       )}

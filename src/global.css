@@ -3034,6 +3034,13 @@ button.player-seat-field--pos::after {
   padding: 10px 12px;
 }
 
+.install-share {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+}
+
 .summary-note {
   margin: 0 0 20px;
   color: var(--text-secondary);
